@@ -1,0 +1,35 @@
+Citi Bike Jersey City / Hoboken: combined IoT event dataset
+Real Citi Bike data for the 83 Jersey City and Hoboken stations, 13–22 March 2024 (10 full days, local time EDT, UTC−04:00). Station sensor updates and trip messages are merged into one time-ordered event stream and split into two consecutive stages.
+
+| File                   | Period                      | Events | station_status | trip_started | trip_ended | Size    |
+| `stage1_offline.jsonl` | 13–19 Mar (Wed–Tue, 7 days) | 53,724 | 16,560         | 18,585       | 18,579     | 18.6 MB |
+| `stage2_online.jsonl`  | 20–22 Mar (Wed–Fri, 3 days) | 19,856 | 6,722          | 6,565        | 6,569      | 6.8 MB  |
+| `stations.json`        | reference data, 83 stations |        |                |              |            | 18 kB   |
+Stage 1 is for offline analysis and model training. Stage 2 is replayed through MQTT as the simulated live stream. The Processor stores it in the same database, so the offline dashboard keeps updating while the online dashboard shows live activity. `seq` continues across both files, so stage 2 starts where stage 1 ends.
+
+Message formats (one JSON object per line)
+station_status: emitted when a station's state changes. The timestamp is the station's own report time.
+```json
+{"type":"station_status","ts":"2024-03-13T00:07:33-04:00","station_id":"JC075",
+ "num_bikes_available":13,"num_ebikes_available":3,"num_bikes_disabled":1,
+ "num_docks_available":0,"num_docks_disabled":0,
+ "is_installed":1,"is_renting":1,"is_returning":1,"seq":1}
+```
+`num_ebikes_available` is included in `num_bikes_available`.
+
+trip_started: emitted when a bike is undocked. Use it to count rides in progress.
+```json
+{"type":"trip_started","ts":"...","ride_id":"...","rideable_type":"electric_bike",
+ "member_casual":"member","start_station_id":"HB602","start_station_name":"...",
+ "start_lat":40.743,"start_lng":-74.027,"seq":...}
+```
+
+trip_ended: emitted when the bike is docked. It carries the complete trip record.
+```json
+{"type":"trip_ended","ts":"...","ride_id":"...","rideable_type":"electric_bike",
+ "member_casual":"member","started_at":"...","ended_at":"...","duration_s":180,
+ "start_station_id":"HB602","start_station_name":"...","end_station_id":"HB105",
+ "end_station_name":"...","start_lat":...,"start_lng":...,"end_lat":...,"end_lng":...,"seq":...}
+```
+
+Station IDs (`JC…`, `HB…`) are the same in trips, status messages and `stations.json`.
