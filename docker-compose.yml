@@ -1,0 +1,93 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/app/start.sh"]
+    tmpfs:
+      - /run/bike-private
+    ports:
+      - "${MQTT_BIND:-0.0.0.0}:1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/start.sh:/app/start.sh:ro
+      - ./.local/mosquitto/passwords:/run/bike-mqtt/passwords:ro
+      - ./.local/mosquitto/acl:/run/bike-mqtt/acl:ro
+      - ./.local/mosquitto/health.password:/run/bike-mqtt/health.password:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+      - ./.local/certs/mosquitto.crt:/run/bike-certs/server.crt:ro
+      - ./.local/certs/mosquitto.key:/run/bike-certs/server.key:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 1883 --cafile /run/bike-certs/ca.crt -u health -P \"$$(cat /run/bike-private/health.password)\" -t 'idc/fc${GROUP_NUMBER:?Set GROUP_NUMBER}/health' -n"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  database:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --require_secure_transport=ON
+      - --mysqlx=0
+      - --ssl-ca=/run/bike-certs/ca.crt
+      - --ssl-cert=/run/bike-certs/server.crt
+      - --ssl-key=/run/bike-certs/server.key
+    environment:
+      MYSQL_DATABASE: bike_sharing
+      MYSQL_USER: bike_app
+      MYSQL_PASSWORD_FILE: /run/bike-secrets/db-user.password
+      MYSQL_ROOT_PASSWORD_FILE: /run/bike-secrets/db-root.password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./.local/mysql/db-user.password:/run/bike-secrets/db-user.password:ro
+      - ./.local/mysql/db-root.password:/run/bike-secrets/db-root.password:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+      - ./.local/certs/database.crt:/run/bike-certs/server.crt:ro
+      - ./.local/certs/database.key:/run/bike-certs/server.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$(cat /run/bike-secrets/db-user.password)\" mysql --protocol=TCP --host=database --ssl-mode=VERIFY_IDENTITY --ssl-ca=/run/bike-certs/ca.crt --user=bike_app --batch --skip-column-names --execute='SELECT 1' bike_sharing > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  processor:
+    image: python:3.13-slim
+    restart: unless-stopped
+    command: ["python", "-u", "/app/placeholder.py", "processor"]
+    environment:
+      GROUP_NUMBER: "${GROUP_NUMBER:?Set GROUP_NUMBER}"
+    volumes:
+      - ./infrastructure/placeholder.py:/app/placeholder.py:ro
+
+  ml-processor:
+    image: python:3.13-slim
+    restart: unless-stopped
+    command: ["python", "-u", "/app/placeholder.py", "ML processor"]
+    volumes:
+      - ./infrastructure/placeholder.py:/app/placeholder.py:ro
+
+  dashboard:
+    image: nodered/node-red:4.1.5
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_BIND:-127.0.0.1}:1880:1880"
+    volumes:
+      - nodered_data:/data
+      - ./dashboard/settings.js:/data/settings.js:ro
+      - ./.local/dashboard/admin.hash:/run/bike-dashboard/admin.hash:ro
+      - ./.local/dashboard/credential-secret:/run/bike-dashboard/credential-secret:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+      - ./.local/certs/dashboard.crt:/run/bike-certs/server.crt:ro
+      - ./.local/certs/dashboard.key:/run/bike-certs/server.key:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('https');const f=require('fs');h.get({hostname:'localhost',port:1880,path:'/auth/login',ca:f.readFileSync('/run/bike-certs/ca.crt')},r=>process.exit(r.statusCode < 500 ? 0 : 1)).on('error',()=>process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mosquitto_data:
+  mysql_data:
+  nodered_data:
