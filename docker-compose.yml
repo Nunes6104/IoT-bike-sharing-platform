@@ -52,13 +52,79 @@ services:
       start_period: 60s
 
   processor:
-    image: python:3.13-slim
+    build:
+      context: .
+      dockerfile: processor/Dockerfile
     restart: unless-stopped
-    command: ["python", "-u", "/app/placeholder.py", "processor"]
+    init: true
+    command: ["python", "-u", "-m", "processor", "run"]
     environment:
       GROUP_NUMBER: "${GROUP_NUMBER:?Set GROUP_NUMBER}"
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_NAME: bike_sharing
+      DB_USER: bike_app
+      DB_PASSWORD_FILE: /run/bike-secrets/db-user.password
+      DB_CA_CERT: /run/bike-certs/ca.crt
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: processor
+      MQTT_PASSWORD_FILE: /run/bike-mqtt/processor.password
+      MQTT_CA_CERT: /run/bike-certs/ca.crt
+      STATIONS_PATH: /app/dataset-IdC-2627/stations.json
+      ANALYTICS_TOKEN_FILE: /run/bike-processor/analytics.token
+      API_CERT_FILE: /run/bike-certs/server.crt
+      API_KEY_FILE: /run/bike-certs/server.key
+      PROCESSOR_READY_FILE: /tmp/processor-ready
     volumes:
-      - ./infrastructure/placeholder.py:/app/placeholder.py:ro
+      - ./dataset-IdC-2627:/app/dataset-IdC-2627:ro
+      - ./.local/mysql/db-user.password:/run/bike-secrets/db-user.password:ro
+      - ./.local/mosquitto/processor.password:/run/bike-mqtt/processor.password:ro
+      - ./.local/processor/analytics.token:/run/bike-processor/analytics.token:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+      - ./.local/certs/processor.crt:/run/bike-certs/server.crt:ro
+      - ./.local/certs/processor.key:/run/bike-certs/server.key:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/tmp/processor-ready').is_file() else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 30s
+
+  publisher:
+    profiles: ["replay"]
+    build:
+      context: .
+      dockerfile: publisher/Dockerfile
+    init: true
+    restart: "no"
+    environment:
+      GROUP_NUMBER: "${GROUP_NUMBER:?Set GROUP_NUMBER}"
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: publisher
+      MQTT_PASSWORD_FILE: /run/bike-mqtt/publisher.password
+      MQTT_CA_CERT: /run/bike-certs/ca.crt
+      DATA_PATH: /data/stage2_online.jsonl
+      STATIONS_PATH: /app/dataset-IdC-2627/stations.json
+      REPLAY_SPEED: "${REPLAY_SPEED:-1}"
+      REPLAY_CHECKPOINT: /state/stage2.checkpoint.json
+    volumes:
+      - ./dataset-IdC-2627/stage2_online.jsonl:/data/stage2_online.jsonl:ro
+      - ./.local/mosquitto/publisher.password:/run/bike-mqtt/publisher.password:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+      - publisher_checkpoint:/state
+    depends_on:
+      processor:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
 
   ml-processor:
     image: python:3.13-slim
@@ -75,11 +141,18 @@ services:
     volumes:
       - nodered_data:/data
       - ./dashboard/settings.js:/data/settings.js:ro
+      - ./dashboard/flows.json:/data/flows.json:ro
       - ./.local/dashboard/admin.hash:/run/bike-dashboard/admin.hash:ro
       - ./.local/dashboard/credential-secret:/run/bike-dashboard/credential-secret:ro
+      - ./.local/processor/analytics.token:/run/bike-dashboard/analytics.token:ro
       - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
       - ./.local/certs/dashboard.crt:/run/bike-certs/server.crt:ro
       - ./.local/certs/dashboard.key:/run/bike-certs/server.key:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/bike-certs/ca.crt
+    depends_on:
+      processor:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "const h=require('https');const f=require('fs');h.get({hostname:'localhost',port:1880,path:'/auth/login',ca:f.readFileSync('/run/bike-certs/ca.crt')},r=>process.exit(r.statusCode < 500 ? 0 : 1)).on('error',()=>process.exit(1));"]
       interval: 30s
@@ -91,3 +164,4 @@ volumes:
   mosquitto_data:
   mysql_data:
   nodered_data:
+  publisher_checkpoint:

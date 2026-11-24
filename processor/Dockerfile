@@ -2,13 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY processor/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN useradd --create-home --uid 10001 app
+COPY processor/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy application code
 COPY processor/ /app/processor/
-COPY database/schema.sql /app/database/
+COPY database/ /app/database/
+COPY dataset-IdC-2627/stations.json /app/dataset-IdC-2627/stations.json
+RUN chown -R app:app /app
+USER app
 
-# Default command: placeholder
-CMD ["python", "-m", "processor", "--help"]
+CMD ["python", "-m", "processor", "run"]
