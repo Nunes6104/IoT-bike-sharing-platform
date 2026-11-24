@@ -6,6 +6,9 @@ const readSecret = (name) =>
 module.exports = {
     flowFile: "flows.json",
     credentialSecret: readSecret("credential-secret"),
+    functionGlobalContext: {
+        analyticsToken: readSecret("analytics.token"),
+    },
     https: {
         key: fs.readFileSync("/run/bike-certs/server.key"),
         cert: fs.readFileSync("/run/bike-certs/server.crt"),
