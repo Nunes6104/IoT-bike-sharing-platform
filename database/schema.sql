@@ -1,5 +1,5 @@
 -- Bike-sharing IoT platform: versioned MySQL schema
--- Version: 1
+-- Base schema version: 1 (online ingestion additions are in migrations/).
 -- Created: 2024-11-20
 -- Storage convention: all timestamps in UTC (zero-offset); original source offset preserved in raw payloads.
 
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS rejected_lines (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Conflict log (key collision detection for idempotent imports)
--- Records updates to seq keys where content hash differs
+-- Migration 002 adds a unique key so redelivery is auditable only once.
 CREATE TABLE IF NOT EXISTS event_conflicts (
     seq BIGINT NOT NULL,
     old_hash VARCHAR(64) COMMENT 'SHA-256 of previous payload',
