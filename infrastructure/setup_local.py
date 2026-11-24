@@ -73,7 +73,8 @@ def provision(openssl: str, group: str, hostnames: list[str]) -> None:
     mqtt = LOCAL / "mosquitto"
     mysql = LOCAL / "mysql"
     dashboard = LOCAL / "dashboard"
-    for directory in (certs, mqtt, mysql, dashboard):
+    processor = LOCAL / "processor"
+    for directory in (certs, mqtt, mysql, dashboard, processor):
         directory.mkdir(parents=True, mode=0o700)
 
     ca_key, ca_cert = certs / "ca.key", certs / "ca.crt"
@@ -83,7 +84,7 @@ def provision(openssl: str, group: str, hostnames: list[str]) -> None:
          "-addext", "basicConstraints=critical,CA:TRUE",
          "-addext", "keyUsage=critical,keyCertSign,cRLSign"])
     ca_key.chmod(0o600)
-    for name in ("mosquitto", "database", "dashboard"):
+    for name in ("mosquitto", "database", "dashboard", "processor"):
         key, csr, cert = (certs / f"{name}.{suffix}" for suffix in ("key", "csr", "crt"))
         sans = ",".join(dict.fromkeys(["DNS:localhost", "IP:127.0.0.1", f"DNS:{name}", *entries]))
         run([openssl, "req", "-new", "-newkey", "rsa:2048", "-nodes",
@@ -126,6 +127,7 @@ def provision(openssl: str, group: str, hostnames: list[str]) -> None:
     write_secret(dashboard / "admin.password", admin_password)
     write_secret(dashboard / "admin.hash", admin_hash, mounted=True)
     write_secret(dashboard / "credential-secret", secrets.token_urlsafe(32), mounted=True)
+    write_secret(processor / "analytics.token", secrets.token_urlsafe(32), mounted=True)
 
 
 def main() -> int:

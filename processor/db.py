@@ -1,93 +1,93 @@
-"""Database connection setup with TLS certificate verification."""
+"""Database connection setup with mandatory MySQL TLS identity verification."""
 
-import ssl
-from urllib.parse import urlparse, parse_qs
+import re
+from pathlib import Path
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool
 
 
 def create_secure_connection(
     db_url: str,
-    ca_cert_path: str | None = None,
-    verify_cert: bool = True,
+    ca_cert_path: str | Path,
     echo: bool = False,
 ) -> Engine:
-    """
-    Create a secure MySQL connection with TLS certificate verification.
+    """Create a pooled MySQL connection that requires CA and hostname verification."""
+    if not db_url.startswith("mysql+pymysql://"):
+        raise ValueError("the processor requires a mysql+pymysql database URL")
+    ca_path = Path(ca_cert_path)
+    if not ca_path.is_file() or ca_path.stat().st_size == 0:
+        raise ValueError(f"CA certificate is missing or empty: {ca_path}")
 
-    Args:
-        db_url: SQLAlchemy connection string (mysql+pymysql://...).
-        ca_cert_path: Path to CA certificate file for server verification.
-        verify_cert: If True, require valid server certificate; if False, skip verification.
-        echo: If True, log SQL statements.
-
-    Returns:
-        SQLAlchemy Engine with TLS configured.
-
-    Raises:
-        ValueError: If verification is enabled but ca_cert_path is missing.
-        OSError: If ca_cert_path does not exist.
-    """
-    if verify_cert and not ca_cert_path:
-        raise ValueError("ca_cert_path is required when verify_cert=True")
-    if ca_cert_path:
-        ca_cert_path = str(ca_cert_path)
-        with open(ca_cert_path, 'rb') as f:
-            if not f.read():
-                raise ValueError(f"CA certificate is empty: {ca_cert_path}")
-
-    engine = create_engine(
+    return create_engine(
         db_url,
         poolclass=QueuePool,
         pool_size=5,
         max_overflow=10,
         pool_pre_ping=True,
+        pool_recycle=1800,
         echo=echo,
+        connect_args={
+            # Disable FOUND_ROWS so a no-op duplicate upsert reports rowcount 0.
+            "client_flag": 0,
+            "ssl_ca": str(ca_path),
+            "ssl_verify_cert": True,
+            "ssl_verify_identity": True,
+        },
     )
 
-    @event.listens_for(Engine, "connect")
-    def configure_tls(dbapi_conn, connection_record):
-        """Configure TLS on each new connection."""
-        if dbapi_conn.get_server_info():
-            cursor = dbapi_conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.close()
 
-    if ca_cert_path and verify_cert:
-        import pymysql
-        def setup_ssl(conn):
-            if hasattr(conn, 'sock'):
-                ssl_context = ssl.create_default_context(cafile=ca_cert_path)
-                ssl_context.check_hostname = True
-                ssl_context.verify_mode = ssl.CERT_REQUIRED
-        @event.listens_for(Engine, "connect")
-        def setup_ssl_on_connect(dbapi_conn, connection_record):
-            setup_ssl(dbapi_conn)
+def apply_schema(engine: Engine, schema_path: str | Path) -> None:
+    """Apply the base schema and each unapplied numbered SQL migration."""
+    root = Path(schema_path)
+    _execute_script(engine, root.read_text(encoding="utf-8"))
 
-    return engine
+    versions = root.parent / "migrations"
+    if not versions.is_dir():
+        return
+    for migration in sorted(versions.glob("[0-9][0-9][0-9]_*.sql")):
+        version = int(migration.name[:3])
+        with engine.connect() as connection:
+            applied = connection.execute(
+                text("SELECT 1 FROM schema_versions WHERE version = :version"),
+                {"version": version},
+            ).first()
+        if applied:
+            continue
+        migration_sql = migration.read_text(encoding="utf-8")
+        for index_name, table_name in re.findall(
+            r"(?i)CREATE\s+UNIQUE\s+INDEX\s+([A-Za-z0-9_]+)\s+ON\s+([A-Za-z0-9_]+)",
+            migration_sql,
+        ):
+            existing_indexes = inspect(engine).get_indexes(table_name)
+            if any(index.get("name") == index_name for index in existing_indexes):
+                migration_sql = re.sub(
+                    rf"(?i)CREATE\s+UNIQUE\s+INDEX\s+{re.escape(index_name)}\s+ON\s+{re.escape(table_name)}\s*\([^;]+\)\s*;",
+                    "",
+                    migration_sql,
+                )
+        _execute_script(engine, migration_sql)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO schema_versions (version, description) "
+                    "VALUES (:version, :description)"
+                ),
+                {
+                    "version": version,
+                    "description": migration.stem.replace("_", " "),
+                },
+            )
 
 
-def apply_schema(engine: Engine, schema_path: str) -> None:
-    """
-    Apply versioned schema from SQL file.
-
-    Args:
-        engine: SQLAlchemy Engine.
-        schema_path: Path to schema.sql file.
-
-    Raises:
-        OSError: If schema file not found.
-        Exception: On SQL execution error.
-    """
-    with open(schema_path, 'r', encoding='utf-8') as f:
-        schema = f.read()
-
-    with engine.connect() as conn:
-        conn.execute(text("SET SESSION time_zone='+00:00'"))
-        for statement in schema.split(';'):
+def _execute_script(engine: Engine, script: str) -> None:
+    """Execute semicolon-separated DDL after removing standalone SQL comments."""
+    uncommented = re.sub(r"(?m)^\s*--.*$", "", script)
+    with engine.begin() as connection:
+        for statement in uncommented.split(";"):
             statement = statement.strip()
-            if statement and not statement.startswith('--'):
-                conn.execute(text(statement))
-        conn.commit()
+            if statement:
+                connection.execute(text(statement))
+        if engine.dialect.name == "mysql":
+            connection.execute(text("SET SESSION time_zone='+00:00'"))

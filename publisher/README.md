@@ -1,245 +1,28 @@
 # Publisher
 
-This directory contains the MQTT publisher client that emulates the docking-station network by replaying bike-sharing events from the dataset through the Mosquitto broker.
+This package implements Client 1: a publisher that replays the supplied Stage 2 JSONL event stream to the configured MQTT topics.
 
-## Purpose
+## Behavior
 
-The publisher (Client 1 in the architecture) reads stage2_online.jsonl and publishes each event to the Mosquitto broker via MQTT with configurable replay speed. This simulates real-time station updates and trip data, allowing the cloud platform to process live streams without waiting for actual network sensors.
+- Validates each source record and routes `station_status`, `trip_started`, and `trip_ended` events to the configured `idc/fcXX/...` topic.
+- Uses the source timestamps to preserve relative inter-message intervals, divided by `REPLAY_SPEED`.
+- Publishes with QoS 1 over TLS and validates the broker certificate against the configured CA.
+- Persists a checkpoint after each batch of 100 broker-acknowledged messages and at end of file. A crash can replay up to 99 already-acknowledged events; the processor uses idempotent event keys.
 
-## Contents
+The source payload is passed through without inventing fields. Topic and station consistency are checked before publishing.
 
-### Core modules
+## Run with Compose
 
-- **`publisher.py`** — Main publisher client (Milestone 4)
-  - Reads JSONL events from stage2_online.jsonl
-  - Publishes to MQTT topics based on event type:
-    - `station_status` → `idc/fcXX/status/<station_id>`
-    - `trip_started` → `idc/fcXX/trips/started`
-    - `trip_ended` → `idc/fcXX/trips/ended`
-  - Implements configurable replay speed (1x, 10x, 60x, etc.)
-  - Preserves inter-event intervals from original data
-  - Handles graceful shutdown and reconnection logic
-  - Logs published message count and timing
-
-### Configuration
-
-- **`requirements.txt`** — Python dependencies
-  - paho-mqtt (MQTT client library)
-
-- **`Dockerfile`** — Container image for the publisher service
-  - Base: Python 3.11 slim
-  - Installs dependencies from `requirements.txt`
-  - Runs as the publisher cloud service
-
-## Usage
-
-### Environment variables
-
-The publisher reads configuration from environment variables or `.env` file:
-
-- `MQTT_HOST` — Mosquitto broker hostname (default: `mosquitto`)
-- `MQTT_PORT` — Mosquitto TLS port (default: `8883`)
-- `MQTT_USERNAME` — Publisher username (from setup_local.py credentials)
-- `MQTT_PASSWORD` — Publisher password (from setup_local.py credentials)
-- `MQTT_CA_CERT` — Path to CA certificate for TLS verification (default: `.local/certs/ca.crt`)
-- `MQTT_GROUP_NUMBER` — Group number for topic prefix `idc/fcXX/` (required; no default)
-- `DATA_PATH` — Path to stage2_online.jsonl (default: `dataset-IdC-2627/stage2_online.jsonl`)
-- `REPLAY_SPEED` — Multiplier for inter-event intervals (default: `1`; set to `60` for 60x speed)
-- `REPLAY_START_INDEX` — Start from event N in the file (default: `0`; useful for resuming)
-
-Example `.env`:
-
-```env
-MQTT_HOST=mosquitto
-MQTT_PORT=8883
-MQTT_USERNAME=publisher
-MQTT_PASSWORD=<generated-by-setup-local.py>
-MQTT_CA_CERT=.local/certs/ca.crt
-MQTT_GROUP_NUMBER=10
-DATA_PATH=dataset-IdC-2627/stage2_online.jsonl
-REPLAY_SPEED=60
-```
-
-### Running the publisher
-
-#### Standalone (requires Docker Compose services running)
+Set `GROUP_NUMBER` and `REPLAY_SPEED` in the root `.env`, then run:
 
 ```powershell
-# Set up environment
-cp .env.example .env
-# Edit .env to set MQTT credentials and group number
-
-# Run publisher
-python -m publisher.publisher
+docker compose --profile replay run --build --rm publisher
 ```
 
-#### Docker Compose
+The publisher container waits for the processor and broker health checks. Its checkpoint is stored in the Compose `publisher_checkpoint` volume. To intentionally replace that checkpoint and restart from the first line:
 
 ```powershell
-docker compose up publisher
+docker compose --profile replay run --rm --entrypoint python publisher -m publisher --reset
 ```
 
-#### With custom replay speed
-
-```powershell
-# 1x speed (real-time intervals preserved)
-set REPLAY_SPEED=1
-
-# 10x speed (10 times faster)
-set REPLAY_SPEED=10
-
-# 60x speed (60 times faster, useful for rapid testing)
-set REPLAY_SPEED=60
-
-python -m publisher.publisher
-```
-
-#### With specific start index (resume from event N)
-
-```powershell
-set REPLAY_START_INDEX=1000
-python -m publisher.publisher
-# Starts publishing from event 1000 in stage2_online.jsonl
-```
-
-## Data flow
-
-1. **Input:** stage2_online.jsonl with 19,856 events (20–22 March 2024)
-2. **Parsing:** Read each line as JSON; validate event type and required fields
-3. **Routing:** Determine MQTT topic based on event type (status/started/ended)
-4. **Timing:** Calculate delay until next event using inter-event intervals and replay speed multiplier
-5. **Publishing:** Send JSON payload to Mosquitto over TLS
-6. **Output:** Log message counts and timing to stderr
-
-## Key design decisions
-
-- **Preserves inter-event intervals:** Original timestamps drive publish timing, not wall-clock intervals
-  - If two consecutive events are 5 seconds apart in the dataset, they are published 5/REPLAY_SPEED seconds apart
-  - Enables accurate simulation of station load patterns and peak hours
-
-- **Configurable replay speed:** Allows fast testing and simulation
-  - 1x: Real-time interval preservation (useful for demos)
-  - 60x: 1 hour of data published in 1 minute (useful for testing aggregations)
-
-- **Graceful shutdown:** Handles SIGTERM and SIGINT cleanly
-  - Flushes pending messages before exiting
-  - Logs final message count
-
-- **TLS certificate validation:** Clients validate Mosquitto certificate against CA
-  - Requires `.local/certs/ca.crt` (generated by setup_local.py)
-  - Never disables certificate verification in normal operation
-
-- **Resume support:** `REPLAY_START_INDEX` enables starting from a specific event
-  - Useful for testing partial replays or resuming interrupted sessions
-
-## Topic structure
-
-MQTT topics follow the pattern `idc/fcXX/<type>` where:
-
-- `XX` — group number (e.g., `10` for group "10" → topic prefix `idc/fc10/`)
-- `<type>` — event category:
-  - `status/<station_id>` — Station status updates (bikes/docks available)
-  - `trips/started` — Trip start events
-  - `trips/ended` — Trip end events
-
-Example topics:
-- `idc/fc10/status/JC115` — Status for station JC115
-- `idc/fc10/status/HB101` — Status for station HB101
-- `idc/fc10/trips/started` — All trip starts
-- `idc/fc10/trips/ended` — All trip ends
-
-## Message payload format
-
-Messages are published as JSON (identical to stage2_online.jsonl structure):
-
-```json
-{
-  "type": "station_status",
-  "ts": "2024-03-20T14:30:00-04:00",
-  "station_id": "JC115",
-  "bikes_available": 5,
-  "docks_available": 10,
-  "seq": 53725
-}
-```
-
-```json
-{
-  "type": "trip_started",
-  "ts": "2024-03-20T14:35:12-04:00",
-  "station_id": "JC115",
-  "trip_id": "12345",
-  "user_type": "member",
-  "bike_type": "classic",
-  "seq": 53726
-}
-```
-
-```json
-{
-  "type": "trip_ended",
-  "ts": "2024-03-20T14:45:00-04:00",
-  "station_id": "HB101",
-  "trip_id": "12345",
-  "duration": 648,
-  "distance": 2.5,
-  "seq": 53727
-}
-```
-
-## Logging
-
-Publisher logs to stderr with timestamps:
-
-```
-[2024-03-20 14:30:00] Published 100 events, rate: 50/min, next event in 2.1s
-[2024-03-20 14:30:05] Published 150 events, rate: 50/min, next event in 1.8s
-[2024-03-20 14:30:10] Shutdown requested; flushing 2 pending messages
-[2024-03-20 14:30:11] Finished: 19856 events published in 48 seconds
-```
-
-## Connection resilience
-
-- **Automatic reconnection:** If Mosquitto is unreachable, publisher waits with exponential backoff (1s, 2s, 4s, max 30s) before retrying
-- **TLS certificate errors:** Logged and cause exit with error code 1 (fix credentials or certs, then restart)
-- **Missing event file:** Causes exit with error code 2
-
-## Troubleshooting
-
-### "Connection refused" on port 8883
-
-Verify Mosquitto is running and accepting TLS connections:
-```powershell
-docker compose logs mosquitto
-```
-
-### "Certificate verify failed"
-
-Ensure CA certificate path is correct and matches Mosquitto's certificate:
-```powershell
-openssl verify -CAfile .local/certs/ca.crt .local/certs/ca.crt
-```
-
-### "Authentication failure"
-
-Check MQTT_USERNAME and MQTT_PASSWORD match credentials generated by setup_local.py:
-```powershell
-grep publisher .local/users.txt
-```
-
-### No messages received by subscriber
-
-1. Verify publisher is publishing (check logs)
-2. Verify MQTT_GROUP_NUMBER matches subscriber configuration
-3. Check Mosquitto ACL file allows publisher to write to intended topics:
-   ```powershell
-   findstr /C:"publisher" mosquitto/acl
-   ```
-
-## Related files
-
-- `processor/__main__.py` — Subscriber service consuming from Mosquitto
-- `mosquitto/README.md` — MQTT broker configuration and TLS setup
-- `docker-compose.yml` — Service definition
-- `infrastructure/setup_local.py` — Credential generation
-- Root `README.md` — Platform overview and usage
+The checkpoint is bound to the dataset contents, group, and speed. See the root [README](../README.md) for first-time setup and integration details.
