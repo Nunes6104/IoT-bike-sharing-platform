@@ -26,7 +26,8 @@ class AnalyticsApiTests(unittest.TestCase):
                     type TEXT NOT NULL,
                     ts_utc DATETIME NOT NULL,
                     payload TEXT NOT NULL,
-                    validation_status TEXT NOT NULL
+                    validation_status TEXT NOT NULL,
+                    validation_reason TEXT
                 )
             """))
             connection.execute(text("""
@@ -75,6 +76,22 @@ class AnalyticsApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["summary"]["completed_trips"], 0)
         self.assertEqual(payload["bucket"], "day")
+
+    def test_latest_station_snapshot_requires_authentication_and_rejects_query(self):
+        status, payload = self.request("/api/stations/latest")
+        self.assertEqual(status, 401)
+        self.assertEqual(payload, {"error": "unauthorized"})
+
+        status, payload = self.request("/api/stations/latest?station_id=JC001", "test-token")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_latest_station_snapshot_returns_empty_reference_list(self):
+        status, payload = self.request("/api/stations/latest", "test-token")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["stations"], [])
+        self.assertIn("fetched_at", payload)
+        self.assertIsNone(payload["latest_committed_event_at"])
 
 
 if __name__ == "__main__":

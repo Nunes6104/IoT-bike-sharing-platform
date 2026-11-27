@@ -134,7 +134,10 @@ services:
       - ./infrastructure/placeholder.py:/app/placeholder.py:ro
 
   dashboard:
-    image: nodered/node-red:4.1.5
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    image: bike-sharing-dashboard:local
     restart: unless-stopped
     ports:
       - "${DASHBOARD_BIND:-127.0.0.1}:1880:1880"

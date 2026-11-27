@@ -3,3 +3,4 @@ __pycache__/
 findings.jsonl
 .env
 .local/
+dashboard/node_modules/

@@ -9,7 +9,7 @@ The Python processor validates and persists offline and MQTT events, and serves 
 - `offline_loader.py`: stream Stage 1 JSONL into MySQL.
 - `subscriber.py`: receive MQTT events and acknowledge only after persistence/quarantine completes.
 - `calculations.py`, `analytics.py`: fare, energy, duration, trip trends, and observed station utilization.
-- `api.py`, `runtime.py`: HTTPS analytics API and combined processor runtime.
+- `api.py`, `station_snapshot.py`, `runtime.py`: HTTPS analytics and latest station snapshot APIs, plus combined processor runtime.
 - `db.py`, `config.py`: MySQL TLS setup, migrations, and secret-file configuration.
 - `__main__.py`: processor CLI.
 
@@ -26,7 +26,7 @@ docker compose exec -T processor python -m processor load-offline `
 
 The Compose runtime starts MQTT ingestion and the HTTPS API automatically. It uses the configured group, MySQL CA, MQTT CA, and mounted secret files. The MQTT broker listener is TLS on port 1883; do not switch to plaintext for convenience.
 
-The dashboard requests `/api/analytics` from the processor over HTTPS with a service bearer token. Analytics require an explicit UTC−04:00 time range; the end is exclusive and periods are limited to 31 days. See the root [README](../README.md) for setup and replay commands.
+The dashboard requests `/api/analytics` and `/api/stations/latest` from the processor over verified HTTPS with a service bearer token. Analytics require an explicit UTC−04:00 time range; the end is exclusive and periods are limited to 31 days. The snapshot API returns each station reference and its most recent committed, non-rejected status, ordered by source timestamp and then sequence. It includes a separate fetch time and latest committed event time; missing reports and invalid coordinates remain explicit. No query parameters are supported for the snapshot endpoint. See the root [README](../README.md) for setup and replay commands.
 
 ## Persistence and calculations
 

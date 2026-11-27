@@ -8,6 +8,7 @@ This folder contains unit and local integration tests for data validation, inges
 - Offline loading, duplicate event handling, conflict audit, and rejected-payload quarantine.
 - Fare rounding, e-bike energy, missing coordinates, time-range boundaries, and trend aggregation.
 - Analytics API authentication and bad-range handling; TLS connection configuration and migration idempotency.
+- Latest station snapshot ordering, warning retention, missing reports/coordinates, and API authentication/query validation.
 - MQTT topic routing, replay interval scaling, checkpoint resume, and failed publish handling.
 - The dataset-backed SQLite loader integration test.
 
@@ -23,3 +24,10 @@ python -m unittest discover -s tests -v
 ```
 
 Run an individual module with, for example, `python -m unittest tests.test_replay -v`. See the root [README](../README.md) for Compose checks.
+
+The dashboard's pure date parser/formatter checks use Node.js and its pinned Leaflet install:
+
+```powershell
+npm --prefix dashboard ci
+npm --prefix dashboard test
+```

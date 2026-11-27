@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Bike-sharing operations</title>
+  <link rel="stylesheet" href="/assets/leaflet.css">
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow" data-i18n="eyebrow">Jersey City &amp; Hoboken</p>
+      <h1 data-i18n="title">Bike-sharing operations</h1>
+    </div>
+    <div class="header-actions">
+      <label class="language-control" for="language" data-i18n="languageLabel">Language</label>
+      <select id="language" aria-label="Language">
+        <option value="en">English</option>
+        <option value="pt-PT">Português (Portugal)</option>
+      </select>
+    </div>
+    <nav data-i18n-aria="navAria" aria-label="Dashboard pages">
+      <a href="/bike-sharing" data-route="analytics" data-i18n="analyticsNav">Analytics</a>
+      <a href="/bike-sharing/map" data-route="map" data-i18n="mapNav">Station map</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="status-panel" aria-live="polite">
+      <div id="loading" class="loading-view" role="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span data-i18n="loading">Loading dashboard data…</span>
+      </div>
+      <p id="connection-status" role="status" aria-live="polite"></p>
+      <p id="error-message" class="error" role="alert" hidden></p>
+    </section>
+
+    <section id="analytics-page" class="page" aria-labelledby="analytics-heading">
+      <h2 id="analytics-heading" data-i18n="analyticsHeading">Historical analytics</h2>
+      <p class="muted" data-i18n="timezoneNote">Trip start times and bucket labels use the source UTC−04:00 timezone. The end time is exclusive.</p>
+      <form id="filters" novalidate>
+        <div class="filter-field">
+          <label for="start" data-i18n="fromLabel">From (UTC−04:00)</label>
+          <input id="start" type="datetime-local" min="2024-01-01T00:00" max="2024-12-31T23:58" value="2024-03-13T00:00" required aria-describedby="date-format-help">
+        </div>
+        <div class="filter-field">
+          <label for="end" data-i18n="untilLabel">Until, exclusive (UTC−04:00)</label>
+          <input id="end" type="datetime-local" min="2024-01-01T00:01" max="2024-12-31T23:59" value="2024-03-23T00:00" required aria-describedby="date-format-help">
+        </div>
+        <div class="filter-field">
+          <label for="bucket" data-i18n="bucketLabel">Trend interval</label>
+          <select id="bucket">
+            <option value="hour" data-i18n="hourly">Hourly</option>
+            <option value="day" selected data-i18n="daily">Daily</option>
+            <option value="week" data-i18n="weekly">Weekly (Monday start)</option>
+          </select>
+        </div>
+        <span id="date-format-help" class="field-help" data-i18n="dateFormatHelp">Select dates in 2024 and times in UTC−04:00. The end must be after the start; it is adjusted if the start moves past it.</span>
+      </form>
+
+      <p id="empty-analytics" class="empty-state" data-i18n="emptyAnalytics" hidden>No completed trips match this period.</p>
+      <div id="summary" class="cards" data-i18n-aria="summaryAria" aria-label="Period summary"></div>
+
+      <h3 data-i18n="tripTrendsHeading">Completed trips by user type</h3>
+      <div id="trip-chart" class="chart" aria-label="Completed trips chart"></div>
+      <h3 data-i18n="energyFareHeading">Energy and estimated fare</h3>
+      <div class="chart-grid">
+        <div><h4 data-i18n="energyHeading">Known e-bike energy (kWh)</h4><div id="energy-chart" class="chart"></div></div>
+        <div><h4 data-i18n="fareHeading">Estimated fare (USD)</h4><div id="fare-chart" class="chart"></div></div>
+      </div>
+      <h3 data-i18n="durationHeading">Trip duration</h3>
+      <div class="chart-grid">
+        <div><h4 data-i18n="averageDurationHeading">Average duration (minutes)</h4><div id="average-duration-chart" class="chart"></div></div>
+        <div><h4 data-i18n="totalDurationHeading">Total duration (hours)</h4><div id="total-duration-chart" class="chart"></div></div>
+      </div>
+
+      <h3 data-i18n="timeOfDayHeading">Trips by time of day</h3>
+      <div id="period-chart" class="chart"></div>
+      <ul id="period-values" class="period-values"></ul>
+      <div class="table-wrap">
+        <table>
+          <caption data-i18n="trendTableCaption">Detailed trend values; unknown averages remain unknown.</caption>
+          <thead><tr>
+            <th data-i18n="bucketColumn">Bucket start (UTC−04:00)</th><th data-i18n="tripsColumn">Trips</th>
+            <th data-i18n="membersColumn">Members</th><th data-i18n="casualColumn">Casual</th>
+            <th data-i18n="avgColumn">Avg duration (min)</th><th data-i18n="totalColumn">Total duration (h)</th>
+            <th data-i18n="energyColumn">Known energy (kWh)</th><th data-i18n="unknownEnergyColumn">Unknown energy trips</th>
+            <th data-i18n="fareColumn">Estimated fare (USD)</th>
+          </tr></thead>
+          <tbody id="trends"></tbody>
+        </table>
+      </div>
+
+      <h3 data-i18n="stationDemandHeading">Station demand and observed availability</h3>
+      <p class="muted" data-i18n="availabilityNote">Empty/full shares use observed status updates, not elapsed time. Missing reports are not zero availability.</p>
+      <p id="station-chart-note" class="muted"></p>
+      <div class="chart-grid">
+        <div><h4 data-i18n="demandChartHeading">Member/casual station departures and arrivals</h4><div id="demand-chart" class="chart"></div></div>
+        <div><h4 data-i18n="emptyFullChartHeading">Observed empty/full update shares (%)</h4><div id="empty-full-chart" class="chart"></div></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption data-i18n="stationTableCaption">All reference stations; observed status counts are updates, not elapsed time.</caption>
+          <thead><tr>
+            <th data-i18n="stationColumn">Station</th><th data-i18n="memberDeparturesColumn">Member departures</th>
+            <th data-i18n="casualDeparturesColumn">Casual departures</th><th data-i18n="memberArrivalsColumn">Member arrivals</th>
+            <th data-i18n="casualArrivalsColumn">Casual arrivals</th><th data-i18n="updatesColumn">Status updates</th>
+            <th data-i18n="emptyColumn">Empty updates</th><th data-i18n="emptyShareColumn">Empty update share (%)</th>
+            <th data-i18n="fullColumn">Full updates</th><th data-i18n="fullShareColumn">Full update share (%)</th>
+          </tr></thead>
+          <tbody id="stations"></tbody>
+        </table>
+      </div>
+      <p id="last-analytics-update" class="muted"></p>
+    </section>
+
+    <section id="map-page" class="page" aria-labelledby="map-heading" hidden>
+      <h2 id="map-heading" data-i18n="mapHeading">Station availability map</h2>
+      <p class="muted" data-i18n="mapScope">Latest committed station reports, independent of analytics filters. Report times are historical source times (UTC−04:00), not live telemetry.</p>
+      <p id="map-tile-error" class="error" role="status" hidden data-i18n="tileError">Map tiles are unavailable. Station data and the station list remain available.</p>
+      <div class="map-layout">
+        <div id="station-map" role="region" data-i18n-aria="stationMapAria" aria-label="Map of bike stations"></div>
+        <aside>
+          <h3 data-i18n="stationListHeading">Stations</h3>
+          <p id="station-empty" class="empty-state" hidden></p>
+          <ul id="station-list" class="station-list"></ul>
+        </aside>
+      </div>
+      <section id="station-detail" class="station-detail" aria-live="polite" hidden>
+        <h3 id="detail-title"></h3>
+        <div id="detail-content" class="detail-grid"></div>
+      </section>
+      <p id="last-map-update" class="muted"></p>
+    </section>
+  </main>
+  <footer>
+    <span data-i18n="footerTimezone">All displayed times use the source UTC−04:00 offset.</span>
+    <span>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></span>
+  </footer>
+  <script src="/assets/leaflet.js"></script>
+  <script src="/assets/core.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

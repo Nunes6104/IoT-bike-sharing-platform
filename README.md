@@ -7,10 +7,11 @@ Docker Compose project for the supplied Jersey City and Hoboken bike-share datas
 - Loads station reference data and Stage 1 JSONL events into MySQL.
 - Validates and stores MQTT events with duplicate protection and quarantine for rejected payloads.
 - Replays Stage 2 JSONL events through MQTT with configurable timing and an acknowledgment-based checkpoint.
-- Serves a date-filtered dashboard for completed trips, duration, estimated fare and e-bike energy, time-of-day totals, and station utilization.
+- Serves a date-filtered dashboard with trip, energy, fare, duration, time-of-day, and station-demand charts and detailed tables.
+- Shows a station availability map with the latest committed status reports and unknown status for stations without observations.
 - Uses TLS for MQTT on port **1883**, MySQL connections, and the dashboard-to-processor API. Port 1883 is explicitly configured as TLS, not plaintext.
 
-The dashboard reports completed trips from `trip_ended` events, grouped by source-local trip start time. Its end date is exclusive. Energy coverage is shown explicitly when coordinates are unavailable; missing station updates are not interpreted as zero bikes or docks. Active-trip displays, ML clusters, and anomaly detection are not implemented.
+The dashboard reports completed trips from `trip_ended` events, grouped by source-local trip start time. Its end date is exclusive. Energy coverage is shown explicitly when coordinates are unavailable; missing station updates are not interpreted as zero bikes or docks. The map shows committed reports, not live bike positions or guaranteed present-day availability. Active-trip displays, ML clusters, and anomaly detection are not implemented.
 
 ## Repository map
 
@@ -46,6 +47,12 @@ The setup script reads `GROUP_NUMBER` from `.env`, creates local-only credential
 MQTT topics use the configured group, for example `idc/fcXX/status/<station_id>`, `idc/fcXX/trips/started`, and `idc/fcXX/trips/ended`. The Compose MQTT listener is TLS on port 1883. Set `MQTT_BIND` in `.env` to control its host binding; the default permits remote clients, so expose it only on a trusted network and distribute the development CA securely.
 
 The Node-RED page is at **https://localhost:1880/bike-sharing**. The editor and HTTP flows require basic authentication (`admin`); the generated password is in `.local/dashboard/admin.password`. The browser must trust `.local/certs/ca.crt` to avoid a certificate warning.
+
+The station map is available at **https://localhost:1880/bike-sharing/map**. Analytics and map pages refresh sequentially every five seconds while active, pause while the browser tab is hidden, retain the last successful view on failures, and retry transient errors. English and Portuguese (Portugal) labels are available without a page reload. Displayed results use `dd/mm/yyyy hh:mm` and the source UTC−04:00 offset; native date/time filter formatting depends on the browser.
+
+After changing processor or dashboard code, run `docker compose up -d --build --wait processor dashboard` to replace outdated images. Port 8765 is not a project service. The dashboard reads committed data from the processor and database, not directly from Mosquitto; Stage 2 MQTT messages appear only when the replay publisher is running or has already published them.
+
+Leaflet JavaScript/CSS assets are installed from the pinned `dashboard/package-lock.json` during the dashboard image build and served locally. Street tiles come from OpenStreetMap over HTTPS with visible attribution. Using the tile service requires internet and reveals the browser IP and viewed map area to that provider; the dashboard sends no application data or credentials to it. If tiles are unavailable, station locations and the accessible station list remain available.
 
 ## Load Stage 1 data
 
@@ -83,6 +90,8 @@ Install the processor dependencies if needed, then run:
 ```powershell
 python -m pip install -r processor\requirements.txt
 python -m unittest discover -s tests -v
+npm --prefix dashboard ci
+npm --prefix dashboard test
 docker compose config --quiet
 docker compose ps
 ```
@@ -92,6 +101,7 @@ Useful logs: `docker compose logs processor`, `docker compose logs mosquitto`, a
 ## Analytics and business assumptions
 
 - The API accepts an explicitly UTC−04:00 `start` and `end` and `bucket=hour|day|week`; ranges are half-open and limited to 31 days.
+- The authenticated `/api/stations/latest` endpoint returns reference stations and their latest committed non-rejected status independently of analytics date filters.
 - Weekly buckets start Monday at local midnight.
 - Estimated e-bike energy is based on straight-line station distance at 15 Wh/km; classic-bike energy is zero. Missing coordinates leave e-bike energy unknown.
 - Fare overage minutes round up; the e-bike surcharge applies to exact trip minutes; the final fare rounds half-up to cents. See [processor/calculations.py](processor/calculations.py) and [processor/README.md](processor/README.md).

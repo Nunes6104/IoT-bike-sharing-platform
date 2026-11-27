@@ -1,4 +1,4 @@
-"""HTTPS analytics API for the Node-RED operator dashboard."""
+"""HTTPS APIs for the Node-RED operator dashboard."""
 
 import hmac
 import json
@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 from sqlalchemy import Engine, text
 
 from processor.analytics import AnalyticsService
+from processor.station_snapshot import StationSnapshotService
 
 
 LOGGER = logging.getLogger("processor.api")
@@ -37,6 +38,7 @@ class ReadyHTTPServer(ThreadingHTTPServer):
 def create_handler(engine: Engine, token: str) -> type[BaseHTTPRequestHandler]:
     """Create a request handler bound to the engine and bearer token."""
     analytics = AnalyticsService(engine)
+    stations = StationSnapshotService(engine)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "BikeSharingAnalytics/1.0"
@@ -50,6 +52,18 @@ def create_handler(engine: Engine, token: str) -> type[BaseHTTPRequestHandler]:
             expected = f"Bearer {token}"
             if not hmac.compare_digest(supplied, expected):
                 self._send_json(401, {"error": "unauthorized"})
+                return
+            if path.path == "/api/stations/latest":
+                if path.query:
+                    self._send_json(400, {"error": "query parameters are not supported"})
+                    return
+                try:
+                    result = stations.latest()
+                except Exception:
+                    LOGGER.exception("Station snapshot request failed")
+                    self._send_json(500, {"error": "station snapshot request failed"})
+                    return
+                self._send_json(200, result)
                 return
             if path.path != "/api/analytics":
                 self._send_json(404, {"error": "not found"})
