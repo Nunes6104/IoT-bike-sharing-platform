@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import Engine, text
 
 from processor.calculations import estimate_energy_kwh, estimate_fare_usd
+from processor.dataset import STAGE2_SEQUENCE_START
 from processor.validation import parse_json_record, parse_source_timestamp
 
 
@@ -84,15 +85,30 @@ class AnalyticsService:
             if self.engine.dialect.name == "mysql":
                 connection.execute(text("SET SESSION time_zone='+00:00'"))
             trip_rows = connection.execute(
-                text("SELECT payload, validation_status FROM events WHERE type='trip_ended'")
-            )
+                text(
+                    "SELECT payload, validation_status FROM events "
+                    "WHERE type='trip_ended' AND seq < :stage2_sequence_start "
+                    "UNION ALL "
+                    "SELECT payload, validation_status FROM online_events "
+                    "WHERE type='trip_ended'"
+                ),
+                {"stage2_sequence_start": STAGE2_SEQUENCE_START},
+            ).all()
             station_rows = connection.execute(
                 text(
                     "SELECT payload FROM events "
+                    "WHERE type='station_status' AND seq < :stage2_sequence_start "
+                    "AND ts_utc >= :start AND ts_utc < :end "
+                    "UNION ALL "
+                    "SELECT payload FROM online_events "
                     "WHERE type='station_status' AND ts_utc >= :start AND ts_utc < :end"
                 ),
-                {"start": start_utc, "end": end_utc},
-            )
+                {
+                    "start": start_utc,
+                    "end": end_utc,
+                    "stage2_sequence_start": STAGE2_SEQUENCE_START,
+                },
+            ).all()
             reference_rows = connection.execute(text("SELECT payload FROM stations"))
 
             trips = [

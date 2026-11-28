@@ -4,7 +4,7 @@
     "type": "tab",
     "label": "Bike Sharing Operator Dashboard",
     "disabled": false,
-    "info": "Authenticated historical analytics and latest station map; processor access uses verified HTTPS."
+    "info": "Authenticated historical analytics, station map, and explainable station profiles; processor access uses verified HTTPS."
   },
   {
     "id": "dash-root-in",
@@ -30,6 +30,19 @@
     "swaggerDoc": "",
     "x": 160,
     "y": 150,
+    "wires": [["dash-html-headers"]]
+  },
+  {
+    "id": "dash-profiles-in",
+    "type": "http in",
+    "z": "bikes-tab",
+    "name": "Station profiles page",
+    "url": "/bike-sharing/profiles",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 200,
     "wires": [["dash-html-headers"]]
   },
   {
@@ -156,11 +169,50 @@
     "wires": [["bikes-api-proxy"]]
   },
   {
+    "id": "bikes-api-model-in",
+    "type": "http in",
+    "z": "bikes-tab",
+    "name": "Authenticated station profile model proxy",
+    "url": "/api/ml/model",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 470,
+    "wires": [["bikes-api-proxy"]]
+  },
+  {
+    "id": "bikes-api-profiles-in",
+    "type": "http in",
+    "z": "bikes-tab",
+    "name": "Authenticated station profiles proxy",
+    "url": "/api/ml/profiles",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 530,
+    "wires": [["bikes-api-proxy"]]
+  },
+  {
+    "id": "bikes-api-flags-in",
+    "type": "http in",
+    "z": "bikes-tab",
+    "name": "Authenticated station flags proxy",
+    "url": "/api/ml/flags",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 590,
+    "wires": [["bikes-api-proxy"]]
+  },
+  {
     "id": "bikes-api-proxy",
     "type": "function",
     "z": "bikes-tab",
     "name": "Fixed HTTPS target and server-side token",
-    "func": "const token = global.get('analyticsToken');\nif (!token) {\n    msg.statusCode = 503;\n    msg.payload = {error: 'Analytics service credentials are unavailable'};\n    return [null, msg, null];\n}\nconst route = msg.req && msg.req.path;\nif (route !== '/api/analytics' && route !== '/api/stations/latest') {\n    msg.statusCode = 404;\n    msg.payload = {error: 'not found'};\n    return [null, null, msg];\n}\n    const query = msg.req.url.includes('?')\n    ? msg.req.url.slice(msg.req.url.indexOf('?')) : '';\nmsg.url = 'https://processor:8443' + route + query;\nmsg.method = 'GET';\nmsg.headers = {authorization: 'Bearer ' + token, accept: 'application/json'};\nreturn [msg, null, null];",
+    "func": "const token = global.get('analyticsToken');\nif (!token) {\n    msg.statusCode = 503;\n    msg.payload = {error: 'Analytics service credentials are unavailable'};\n    return [null, msg, null];\n}\nconst route = msg.req && msg.req.path;\nconst routes = ['/api/analytics', '/api/stations/latest', '/api/ml/model', '/api/ml/profiles', '/api/ml/flags'];\nif (!routes.includes(route)) {\n    msg.statusCode = 404;\n    msg.payload = {error: 'not found'};\n    return [null, null, msg];\n}\nconst query = msg.req.url.includes('?')\n    ? msg.req.url.slice(msg.req.url.indexOf('?')) : '';\nmsg.url = 'https://processor:8443' + route + query;\nmsg.method = 'GET';\nmsg.headers = {authorization: 'Bearer ' + token, accept: 'application/json'};\nreturn [msg, null, null];",
     "outputs": 3,
     "timeout": 0,
     "noerr": 0,

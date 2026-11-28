@@ -49,3 +49,33 @@ test("dashboard shell asset URLs resolve through the Node-RED allowlist", functi
     assert.ok(allowed && !rejected, `${url} is not allowlisted`);
   }
 });
+
+test("station profile page and ML API paths use the fixed authenticated HTTPS proxy", function () {
+  const dashboard = path.join(__dirname, "..");
+  const html = fs.readFileSync(path.join(dashboard, "public", "index.html"), "utf8");
+  const flows = JSON.parse(fs.readFileSync(path.join(dashboard, "flows.json"), "utf8"));
+  const page = flows.find(function (node) { return node.id === "dash-profiles-in"; });
+  const proxy = flows.find(function (node) { return node.id === "bikes-api-proxy"; });
+  assert.equal(page.url, "/bike-sharing/profiles");
+  assert.match(html, /data-route="profiles"/);
+  const forward = new Function("msg", "global", proxy.func);
+  ["/api/ml/model", "/api/ml/profiles", "/api/ml/flags"].forEach(function (route) {
+    const [request] = forward({
+      req: { path: route, url: route + "?start=2024-03-20&end=2024-03-21" }
+    }, { get: function () { return "test-token"; } });
+    assert.equal(request.url, "https://processor:8443" + route + "?start=2024-03-20&end=2024-03-21");
+    assert.equal(request.headers.authorization, "Bearer test-token");
+  });
+});
+
+test("station map includes the Stage 2 open-trip snapshot", function () {
+  const dashboard = path.join(__dirname, "..");
+  const html = fs.readFileSync(path.join(dashboard, "public", "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(dashboard, "public", "app.js"), "utf8");
+  assert.match(html, /id="active-trips"/);
+  assert.match(html, /data-i18n="activeTripsNote"/);
+  assert.match(app, /Array\.isArray\(payload\.active_trips\)/);
+  assert.match(app, /snapshot\.active_trips/);
+  assert.match(app, /Open trips reflect Stage 2 MQTT events received so far/);
+  assert.match(app, /As viagens abertas refletem os eventos MQTT da Fase 2/);
+});

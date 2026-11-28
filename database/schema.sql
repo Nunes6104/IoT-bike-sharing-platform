@@ -33,9 +33,9 @@ CREATE TABLE IF NOT EXISTS stations (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Events (station status updates and trip records)
--- Primary key is the event sequence number from the JSONL files
--- Sequence is globally unique and monotonically increasing across stage1 and stage2.
+-- Immutable Stage 1 offline events and pre-v4 Stage 2 audit rows.
+-- New MQTT Stage 2 events are stored in online_events by migration 004.
+-- Sequence is globally unique and monotonically increasing across both stages.
 CREATE TABLE IF NOT EXISTS events (
     seq BIGINT NOT NULL PRIMARY KEY COMMENT 'Event sequence: unique across all stages, 1-73580',
     type ENUM('station_status', 'trip_started', 'trip_ended') NOT NULL,

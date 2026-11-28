@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, text
 
 from processor.analytics import AnalyticsService, parse_local_range
+from processor.dataset import STAGE2_SEQUENCE_START
 
 
 class AnalyticsTests(unittest.TestCase):
@@ -24,6 +25,15 @@ class AnalyticsTests(unittest.TestCase):
             """))
             connection.execute(text("""
                 CREATE TABLE stations (station_id TEXT PRIMARY KEY, payload TEXT NOT NULL)
+            """))
+            connection.execute(text("""
+                CREATE TABLE online_events (
+                    seq INTEGER PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    ts_utc DATETIME NOT NULL,
+                    payload TEXT NOT NULL,
+                    validation_status TEXT NOT NULL
+                )
             """))
             station = {
                 "station_id": "JC115", "name": "Test Station", "capacity": 20,
@@ -67,12 +77,13 @@ class AnalyticsTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _insert_event(connection, seq, event):
+    def _insert_event(connection, seq, event, table="events"):
         event["seq"] = seq
         timestamp_utc = datetime.fromisoformat(event["ts"]).astimezone(timezone.utc)
         connection.execute(
             text(
-                "INSERT INTO events (seq, type, ts_utc, payload, validation_status) "
+                f"INSERT INTO {table} "
+                "(seq, type, ts_utc, payload, validation_status) "
                 "VALUES (:seq, :type, :ts, :payload, 'valid')"
             ),
             {
@@ -103,6 +114,31 @@ class AnalyticsTests(unittest.TestCase):
         )
         self.assertEqual(result["station_utilization"][0]["observed_status_updates"], 0)
         self.assertIsNone(result["station_utilization"][0]["empty_update_share"])
+
+    def test_analytics_uses_live_stage2_and_ignores_archived_stage2_rows(self):
+        with self.engine.begin() as connection:
+            self._insert_event(
+                connection,
+                STAGE2_SEQUENCE_START,
+                self._trip("archived-stage2", "2024-03-20T08:00:00-04:00"),
+            )
+            self._insert_event(
+                connection,
+                STAGE2_SEQUENCE_START + 1,
+                self._trip("live-stage2", "2024-03-20T09:00:00-04:00"),
+                table="online_events",
+            )
+
+        result = AnalyticsService(self.engine).summarize(
+            "2024-03-20T00:00:00-04:00",
+            "2024-03-21T00:00:00-04:00",
+        )
+
+        self.assertEqual(result["summary"]["completed_trips"], 3)
+        self.assertEqual(
+            sum(point["trips"] for point in result["trends"]),
+            3,
+        )
 
     def test_range_requires_source_offset_and_is_bounded(self):
         with self.assertRaises(ValueError):

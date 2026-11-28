@@ -6,9 +6,10 @@
     en: {
       eyebrow: "Jersey City & Hoboken", title: "Bike-sharing operations", languageLabel: "Language",
       navAria: "Dashboard pages", summaryAria: "Period summary", stationMapAria: "Map of bike stations",
-      analyticsNav: "Analytics", mapNav: "Station map", loading: "Loading dashboard data…",
+      profileSummaryAria: "Profile model summary", activeTripsSummaryAria: "Active trip summary",
+      analyticsNav: "Analytics", mapNav: "Station map", profilesNav: "Station profiles", loading: "Loading dashboard data…",
       analyticsHeading: "Historical analytics",
-      timezoneNote: "Trip start times and bucket labels use the source UTC−04:00 timezone. The end time is exclusive.",
+      timezoneNote: "Stage 1 is a fixed offline baseline; Stage 2 metrics include MQTT events received so far and refresh as they arrive. Trip start times and bucket labels use source UTC−04:00; the end time is exclusive.",
       fromLabel: "From (UTC−04:00)", untilLabel: "Until, exclusive (UTC−04:00)",
       bucketLabel: "Trend interval", hourly: "Hourly", daily: "Daily", weekly: "Weekly (Monday start)",
       dateFormatHelp: "Select dates in 2024 and times in UTC−04:00. The end must be after the start; it is adjusted if the start moves past it.",
@@ -33,9 +34,37 @@
       casualArrivalsColumn: "Casual arrivals", updatesColumn: "Status updates",
       emptyColumn: "Empty updates", emptyShareColumn: "Empty update share (%)",
       fullColumn: "Full updates", fullShareColumn: "Full update share (%)", mapHeading: "Station availability map",
-      mapScope: "Latest committed station reports, independent of analytics filters. Report times are historical source times (UTC−04:00), not live telemetry.",
+      mapScope: "Latest reports combine the fixed Stage 1 baseline with Stage 2 events received through MQTT, independent of analytics filters. The snapshot refreshes automatically; source times are historical replay times, not live bike positions.",
+      activeTripsHeading: "Active trips in the Stage 2 stream",
+      activeTripsNote: "Open trips reflect Stage 2 MQTT events received so far. A trip is open when its latest event is a start without a matching end. Times are historical replay times, not present-day riders; incomplete source records can remain open.",
+      activeTripsEmpty: "No unmatched Stage 2 trip starts.",
+      activeTripsCaption: "Open Stage 2 trips, ordered by most recently received start.",
+      activeTripsCount: "Open trips", tripIdColumn: "Trip ID", tripStartedColumn: "Started (UTC−04:00)",
+      tripStationColumn: "Start station", tripBikeColumn: "Bike type", tripUserColumn: "User type",
+      classicBike: "Classic bike", electricBike: "Electric bike", memberUser: "Member", casualUser: "Casual",
       tileError: "Map tiles are unavailable. Station data and the station list remain available.",
       stationListHeading: "Stations", footerTimezone: "All displayed times use the source UTC−04:00 offset.",
+      profilesHeading: "Station profiles and cluster evolution",
+      profilesNote: "The Stage 1 model and baseline stay fixed; Stage 2 profiles use MQTT events received so far and refresh periodically. Daily profiles use source-local dates (UTC−04:00); missing status observations are not imputed.",
+      profileFromLabel: "From (local date)", profileUntilLabel: "Until, exclusive (local date)",
+      profileDateHelp: "Choose a 1–31 day range in the supplied dataset period. The end date is exclusive.",
+      profilesEmpty: "No model or station profiles are available for this range.",
+      clusterEvolutionHeading: "Station count by cluster and day",
+      profileTableCaption: "Each row is a versioned station/day assignment with measured feature values.",
+      dateColumn: "Local date", cityColumn: "City", clusterColumn: "Cluster",
+      turnoverColumn: "Trips per dock", occupancyColumn: "Mean reported occupancy",
+      memberShareColumn: "Member share", electricShareColumn: "E-bike share",
+      distanceCoverageColumn: "Distance coverage", energyCoverageColumn: "Energy coverage",
+      flagsHeading: "Explainable operational flags",
+      flagsNote: "Flags are comparative or rule-based indicators, not rebalancing recommendations. They use observed data and explicit thresholds.",
+      flagsEmpty: "No operational flags were triggered for this range.",
+      flagsTableCaption: "Every flag includes its observed value and evaluation basis.",
+      flagColumn: "Flag", severityColumn: "Severity", observedColumn: "Observed",
+      thresholdColumn: "Threshold", basisColumn: "Basis", clusterLabel: "Cluster {id}",
+      modelAlgorithm: "Model algorithm", clusterCount: "Clusters", modelTraining: "Training dates",
+      profileCount: "Station/day profiles", flagCount: "Operational flags",
+      loadingProfiles: "Loading station profiles…",
+      lastProfiles: "Last successful profile fetch: {time}.",
       unknown: "Unknown", empty: "Empty (0 bikes)", full: "Full (0 docks)", reported: "Reported availability",
       bikesAvailable: "Bikes available", ebikesIncluded: "E-bikes (included in bikes available)",
       docksAvailable: "Docks available", disabledBikes: "Disabled bikes", disabledDocks: "Disabled docks",
@@ -71,9 +100,10 @@
     "pt-PT": {
       eyebrow: "Jersey City e Hoboken", title: "Operações de bicicletas partilhadas", languageLabel: "Idioma",
       navAria: "Páginas do painel", summaryAria: "Resumo do período", stationMapAria: "Mapa das estações de bicicletas",
-      analyticsNav: "Análise", mapNav: "Mapa das estações", loading: "A carregar dados do painel…",
+      profileSummaryAria: "Resumo do modelo de perfis",
+      analyticsNav: "Análise", mapNav: "Mapa das estações", profilesNav: "Perfis das estações", loading: "A carregar dados do painel…",
       analyticsHeading: "Análise histórica",
-      timezoneNote: "As horas de início das viagens e os intervalos usam o fuso de origem UTC−04:00. A hora final é exclusiva.",
+      timezoneNote: "A Fase 1 é uma base offline fixa; as métricas da Fase 2 incluem os eventos MQTT recebidos até ao momento e atualizam à medida que chegam. As horas usam o fuso de origem UTC−04:00; a hora final é exclusiva.",
       fromLabel: "De (UTC−04:00)", untilLabel: "Até, exclusivo (UTC−04:00)",
       bucketLabel: "Intervalo da tendência", hourly: "Por hora", daily: "Por dia", weekly: "Por semana (início à segunda-feira)",
       dateFormatHelp: "Selecione datas em 2024 e horas em UTC−04:00. O fim deve ser posterior ao início; é ajustado se o início o ultrapassar.",
@@ -99,9 +129,37 @@
       emptyColumn: "Atualizações vazias", emptyShareColumn: "Proporção de atualizações vazias (%)",
       fullColumn: "Atualizações cheias", fullShareColumn: "Proporção de atualizações cheias (%)",
       mapHeading: "Mapa de disponibilidade das estações",
-      mapScope: "Relatórios de estação confirmados mais recentes, independentes dos filtros de análise. As horas são históricas (UTC−04:00), não telemetria em direto.",
+      mapScope: "Os relatórios mais recentes combinam a base fixa da Fase 1 com eventos da Fase 2 recebidos por MQTT, independentemente dos filtros de análise. A consulta atualiza automaticamente; as horas são da reprodução histórica, não posições atuais das bicicletas.",
+      activeTripsHeading: "Viagens ativas na sequência da Fase 2",
+      activeTripsNote: "As viagens abertas refletem os eventos MQTT da Fase 2 recebidos até ao momento. Uma viagem está aberta quando o último evento é uma partida sem chegada correspondente. As horas são da reprodução histórica, não indicam ciclistas atuais; registos incompletos podem permanecer abertos.",
+      activeTripsEmpty: "Não existem partidas da Fase 2 sem chegada correspondente.",
+      activeTripsCaption: "Viagens abertas da Fase 2, ordenadas pela partida recebida mais recentemente.",
+      activeTripsCount: "Viagens abertas", tripIdColumn: "ID da viagem", tripStartedColumn: "Partida (UTC−04:00)",
+      tripStationColumn: "Estação de partida", tripBikeColumn: "Tipo de bicicleta", tripUserColumn: "Tipo de utilizador",
+      classicBike: "Bicicleta clássica", electricBike: "Bicicleta elétrica", memberUser: "Membro", casualUser: "Ocasional",
       tileError: "Os mosaicos do mapa estão indisponíveis. Os dados e a lista de estações continuam disponíveis.",
       stationListHeading: "Estações", footerTimezone: "Todas as horas apresentadas usam o desvio de origem UTC−04:00.",
+      profilesHeading: "Perfis das estações e evolução dos grupos",
+      profilesNote: "O modelo e a base da Fase 1 permanecem fixos; os perfis da Fase 2 usam os eventos MQTT recebidos até ao momento e atualizam periodicamente. Os perfis diários usam datas locais de origem (UTC−04:00); observações em falta não são imputadas.",
+      profileFromLabel: "De (data local)", profileUntilLabel: "Até, exclusivo (data local)",
+      profileDateHelp: "Selecione um intervalo de 1–31 dias no período do conjunto de dados fornecido. A data final é exclusiva.",
+      profilesEmpty: "Não existem modelos ou perfis de estação neste intervalo.",
+      clusterEvolutionHeading: "Número de estações por grupo e dia",
+      profileTableCaption: "Cada linha é uma atribuição versionada por estação/dia com valores de funcionalidades medidas.",
+      dateColumn: "Data local", cityColumn: "Cidade", clusterColumn: "Grupo",
+      turnoverColumn: "Viagens por doca", occupancyColumn: "Ocupação média observada",
+      memberShareColumn: "Proporção de membros", electricShareColumn: "Proporção de bicicletas elétricas",
+      distanceCoverageColumn: "Cobertura de distância", energyCoverageColumn: "Cobertura energética",
+      flagsHeading: "Sinalizações operacionais explicáveis",
+      flagsNote: "As sinalizações são indicadores comparativos ou baseados em regras, não recomendações de redistribuição. Usam dados observados e limites explícitos.",
+      flagsEmpty: "Não foram acionadas sinalizações operacionais neste intervalo.",
+      flagsTableCaption: "Cada sinalização inclui o valor observado e a respetiva base de avaliação.",
+      flagColumn: "Sinalização", severityColumn: "Gravidade", observedColumn: "Observado",
+      thresholdColumn: "Limite", basisColumn: "Base", clusterLabel: "Grupo {id}",
+      modelAlgorithm: "Algoritmo do modelo", clusterCount: "Grupos", modelTraining: "Datas de treino",
+      profileCount: "Perfis estação/dia", flagCount: "Sinalizações operacionais",
+      loadingProfiles: "A carregar perfis das estações…",
+      lastProfiles: "Última consulta bem-sucedida dos perfis: {time}.",
       unknown: "Desconhecido", empty: "Vazia (0 bicicletas)", full: "Cheia (0 docas)", reported: "Disponibilidade reportada",
       bikesAvailable: "Bicicletas disponíveis", ebikesIncluded: "Bicicletas elétricas (incluídas no total)",
       docksAvailable: "Docas disponíveis", disabledBikes: "Bicicletas indisponíveis", disabledDocks: "Docas indisponíveis",
@@ -138,8 +196,11 @@
 
   const $ = function (id) { return document.getElementById(id); };
   const state = {
-    lang: readLanguage(), page: location.pathname.endsWith("/map") ? "map" : "analytics",
-    analytics: null, snapshot: null, lastAnalyticsAt: null, lastSnapshotAt: null,
+    lang: readLanguage(),
+    page: location.pathname.endsWith("/map") ? "map"
+      : location.pathname.endsWith("/profiles") ? "profiles" : "analytics",
+    analytics: null, snapshot: null, profiles: null,
+    lastAnalyticsAt: null, lastSnapshotAt: null, lastProfilesAt: null,
     timer: null, filterTimer: null, request: null, generation: 0, retries: 0,
     connectionMessage: null, errorMessage: null, errorRetained: false,
     map: null, markerById: new Map(), selectedStationId: null, didFitMap: false,
@@ -178,6 +239,7 @@
     });
     if (state.analytics) renderAnalytics();
     if (state.snapshot) renderSnapshot();
+    if (state.profiles) renderProfiles();
     if (state.lastAnalyticsAt) {
       $("last-analytics-update").textContent = t("lastAnalytics", {
         time: Core.formatTimestamp(state.lastAnalyticsAt)
@@ -199,14 +261,16 @@
   }
 
   function setPage(page, updateHistory) {
-    if (updateHistory) history.pushState({}, "", page === "map" ? "/bike-sharing/map" : "/bike-sharing");
-    if (state.page === page && !$("analytics-page").hidden) return;
+    const routes = { analytics: "/bike-sharing", map: "/bike-sharing/map", profiles: "/bike-sharing/profiles" };
+    if (updateHistory) history.pushState({}, "", routes[page]);
+    if (state.page === page && !$((page === "analytics" ? "analytics" : page) + "-page").hidden) return;
     state.page = page;
     state.generation += 1;
     clearTimeout(state.timer);
     if (state.request) state.request.abort();
     $("analytics-page").hidden = page !== "analytics";
     $("map-page").hidden = page !== "map";
+    $("profiles-page").hidden = page !== "profiles";
     applyLanguage();
     if (page === "map" && state.map) setTimeout(function () { state.map.invalidateSize(); }, 0);
     pollNow();
@@ -298,7 +362,8 @@
           rx: "2", fill: item.color
         });
         const title = svgElement("title");
-        title.textContent = (row.label || row.bucket || row.station_id) + " — " + t(item.label) + ": " + value;
+        title.textContent = (row.label || row.bucket || row.station_id) + " — "
+          + (item.displayLabel || t(item.label)) + ": " + value;
         rect.appendChild(title);
         svg.appendChild(rect);
         if (options.stacked) stackOffset += barHeight;
@@ -321,7 +386,7 @@
       const swatch = document.createElement("i");
       swatch.setAttribute("aria-hidden", "true");
       swatch.style.cssText = "display:inline-block;width:.7rem;height:.7rem;margin-right:.3rem;background:" + item.color;
-      entry.append(swatch, document.createTextNode(t(item.label)));
+      entry.append(swatch, document.createTextNode(item.displayLabel || t(item.label)));
       legend.appendChild(entry);
     });
     target.appendChild(legend);
@@ -420,6 +485,85 @@
     });
   }
 
+  function renderProfiles() {
+    const data = state.profiles;
+    if (!data) return;
+    const model = data.model;
+    $("profiles-empty").hidden = Boolean(model && data.profiles.length);
+    $("flags-empty").hidden = data.flags.length > 0;
+    const summary = $("profile-summary");
+    summary.replaceChildren();
+    if (model) {
+      summary.append(
+        createCard(t("modelAlgorithm"), model.algorithm),
+        createCard(t("clusterCount"), formatNumber(model.cluster_count)),
+        createCard(t("modelTraining"), model.training_start + " – " + model.training_end + " (exclusive)"),
+        createCard(t("profileCount"), formatNumber(data.profiles.length)),
+        createCard(t("flagCount"), formatNumber(data.flags.length))
+      );
+    }
+
+    const dates = Array.from(new Set(data.evolution.map(function (row) {
+      return row.window_start;
+    }))).sort();
+    const clusterIds = Array.from(new Set(data.evolution.map(function (row) {
+      return row.cluster_id;
+    }))).sort(function (left, right) { return left - right; });
+    const chartRows = dates.map(function (day) {
+      const row = { label: day };
+      clusterIds.forEach(function (clusterId) { row["cluster_" + clusterId] = 0; });
+      data.evolution.filter(function (item) { return item.window_start === day; })
+        .forEach(function (item) { row["cluster_" + item.cluster_id] = item.station_count; });
+      return row;
+    });
+    const palette = ["#087f9d", "#e18b28", "#168a67", "#6d68b5", "#be6b82", "#507dba", "#9a7a38", "#5f7c67"];
+    renderBarChart("cluster-chart", chartRows, clusterIds.map(function (clusterId, index) {
+      return {
+        key: "cluster_" + clusterId,
+        label: "clusterLabel",
+        displayLabel: t("clusterLabel", { id: clusterId }),
+        color: palette[index % palette.length]
+      };
+    }), {
+      title: t("clusterEvolutionHeading"),
+      label: function (row) { return row.label; },
+      stacked: true
+    });
+
+    const profileTable = $("profiles");
+    profileTable.replaceChildren();
+    data.profiles.forEach(function (profile) {
+      const features = profile.features;
+      addCells(profileTable, [
+        profile.window_start,
+        profile.station_id,
+        profile.city,
+        profile.cluster_id,
+        formatNumber(features.trips_per_capacity, 3),
+        features.mean_occupancy === null ? t("unknown") : formatNumber(features.mean_occupancy * 100, 1) + "%",
+        features.member_share === null ? t("unknown") : formatNumber(features.member_share * 100, 1) + "%",
+        features.electric_share === null ? t("unknown") : formatNumber(features.electric_share * 100, 1) + "%",
+        features.distance_coverage === null ? t("unknown") : formatNumber(features.distance_coverage * 100, 1) + "%",
+        features.energy_kwh === null ? t("unknown") : formatNumber(features.energy_kwh, 3),
+        features.energy_coverage === null ? t("unknown") : formatNumber(features.energy_coverage * 100, 1) + "%"
+      ]);
+    });
+
+    const flagTable = $("profile-flags");
+    flagTable.replaceChildren();
+    data.flags.forEach(function (flag) {
+      addCells(flagTable, [
+        flag.window_start,
+        flag.station_id,
+        flag.type,
+        flag.severity,
+        formatNumber(flag.observed, 3),
+        formatNumber(flag.threshold, 3),
+        flag.basis
+      ]);
+    });
+  }
+
   function syncEndControls(adjustEnd) {
     const start = $("start");
     const end = $("end");
@@ -451,6 +595,20 @@
     const filters = parseFilters();
     const params = new URLSearchParams({ start: filters.start, end: filters.end, bucket: filters.bucket });
     return "/api/analytics?" + params.toString();
+  }
+
+  function paramsForProfiles() {
+    const startInput = $("profile-start");
+    const endInput = $("profile-end");
+    const start = startInput.value;
+    const end = endInput.value;
+    const dayCount = (Date.parse(end + "T00:00:00Z") - Date.parse(start + "T00:00:00Z"))
+      / (24 * 60 * 60 * 1000);
+    if (!startInput.validity.valid || !endInput.validity.valid
+      || !Number.isInteger(dayCount) || dayCount < 1 || dayCount > 31) {
+      throw new Error(t("invalidFilter"));
+    }
+    return "/api/ml/profiles?" + new URLSearchParams({ start: start, end: end }).toString();
   }
 
   function clearRequestTimer(controller, timeout) {
@@ -487,9 +645,16 @@
         && Array.isArray(payload.station_utilization)
         && payload.summary && typeof payload.summary === "object";
       const validSnapshot = payload && typeof payload === "object"
-        && Array.isArray(payload.stations) && typeof payload.fetched_at === "string";
+        && Array.isArray(payload.stations) && Array.isArray(payload.active_trips)
+        && typeof payload.fetched_at === "string";
+      const validProfiles = payload && typeof payload === "object"
+        && (payload.model === null || typeof payload.model === "object")
+        && Array.isArray(payload.profiles)
+        && Array.isArray(payload.evolution)
+        && Array.isArray(payload.flags);
       if ((url.indexOf("/api/analytics?") === 0 && !validAnalytics)
-        || (url === "/api/stations/latest" && !validSnapshot)) {
+        || (url === "/api/stations/latest" && !validSnapshot)
+        || (url.indexOf("/api/ml/profiles?") === 0 && !validProfiles)) {
         const error = new Error("The service returned an unexpected response shape.");
         error.status = 502;
         throw error;
@@ -510,8 +675,10 @@
   function showUpdating() {
     state.errorMessage = null;
     state.errorRetained = false;
-    const last = state.page === "analytics" ? state.lastAnalyticsAt : state.lastSnapshotAt;
-    const hasData = state.page === "analytics" ? Boolean(state.analytics) : Boolean(state.snapshot);
+    const last = state.page === "analytics" ? state.lastAnalyticsAt
+      : state.page === "map" ? state.lastSnapshotAt : state.lastProfilesAt;
+    const hasData = state.page === "analytics" ? Boolean(state.analytics)
+      : state.page === "map" ? Boolean(state.snapshot) : Boolean(state.profiles);
     $("loading").hidden = hasData;
     if (hasData) {
       state.connectionMessage = {
@@ -519,7 +686,10 @@
         values: { time: last ? Core.formatTimestamp(last) : t("unknown") }
       };
     } else {
-      $("loading").querySelector("span:last-child").textContent = t(state.page === "map" ? "loadingStation" : "initialLoading");
+      $("loading").querySelector("span:last-child").textContent = t(
+        state.page === "map" ? "loadingStation"
+          : state.page === "profiles" ? "loadingProfiles" : "initialLoading"
+      );
       state.connectionMessage = null;
     }
     renderStatus();
@@ -547,7 +717,8 @@
       key: error.status ? "serviceError" : "networkError",
       values: { seconds: seconds }
     };
-    state.errorRetained = state.page === "analytics" ? Boolean(state.analytics) : Boolean(state.snapshot);
+    state.errorRetained = state.page === "analytics" ? Boolean(state.analytics)
+      : state.page === "map" ? Boolean(state.snapshot) : Boolean(state.profiles);
     renderStatus();
   }
 
@@ -577,7 +748,8 @@
     if (document.hidden) return;
     let url;
     try {
-      url = state.page === "analytics" ? paramsForAnalytics() : "/api/stations/latest";
+      url = state.page === "analytics" ? paramsForAnalytics()
+        : state.page === "map" ? "/api/stations/latest" : paramsForProfiles();
     } catch (_) {
       $("loading").hidden = true;
       state.errorMessage = { key: "invalidFilter" };
@@ -598,10 +770,17 @@
         state.lastAnalyticsAt = fetchedAt;
         renderAnalytics();
         $("last-analytics-update").textContent = t("lastAnalytics", { time: Core.formatTimestamp(fetchedAt) });
-      } else {
+      } else if (state.page === "map") {
         state.snapshot = result.data;
         state.lastSnapshotAt = fetchedAt;
         renderSnapshot();
+      } else {
+        state.profiles = result.data;
+        state.lastProfilesAt = fetchedAt;
+        renderProfiles();
+        $("last-profiles-update").textContent = t("lastProfiles", {
+          time: Core.formatTimestamp(fetchedAt)
+        });
       }
       const renderMs = Math.round(performance.now() - renderStartedAt);
       state.retries = 0;
@@ -617,7 +796,8 @@
         }
       };
       renderStatus();
-      schedulePoll(Math.max(0, 5000 - (performance.now() - result.responseFinishedAt)));
+      const pollInterval = state.page === "profiles" ? 30000 : 5000;
+      schedulePoll(Math.max(0, pollInterval - (performance.now() - result.responseFinishedAt)));
     } catch (error) {
       if (generation !== state.generation || error.name === "AbortError") return;
       if (error.status !== 400) state.retries += 1;
@@ -716,6 +896,32 @@
   function renderSnapshot() {
     const snapshot = state.snapshot;
     if (!snapshot) return;
+    const activeTrips = snapshot.active_trips;
+    const activeTripsBody = $("active-trips");
+    activeTripsBody.replaceChildren();
+    $("active-trips-summary").replaceChildren(
+      createCard(t("activeTripsCount"), String(activeTrips.length))
+    );
+    $("active-trips-empty").hidden = activeTrips.length > 0;
+    activeTrips.forEach(function (trip) {
+      const bikeType = trip.rideable_type === "electric_bike" ? t("electricBike")
+        : trip.rideable_type === "classic_bike" ? t("classicBike") : t("unknown");
+      const userType = trip.member_casual === "member" ? t("memberUser")
+        : trip.member_casual === "casual" ? t("casualUser") : t("unknown");
+      const warnings = trip.warnings && trip.warnings.length
+        ? trip.warnings.map(function (warning) {
+          return warning.field + ": " + warning.message;
+        }).join("; ")
+        : t("noWarnings");
+      addCells(activeTripsBody, [
+        trip.ride_id,
+        Core.formatTimestamp(trip.started_at),
+        trip.start_station_id || t("unknown"),
+        bikeType,
+        userType,
+        warnings
+      ]);
+    });
     ensureMap();
     const list = $("station-list");
     list.replaceChildren();
@@ -816,7 +1022,7 @@
       state.errorRetained = false;
       renderStatus();
       state.filterTimer = setTimeout(function () {
-        if (state.page === "analytics") pollNow();
+        if (state.page === "analytics" || state.page === "profiles") pollNow();
       }, 350);
     } catch (_) {
       state.errorMessage = { key: "invalidFilter" };
@@ -828,6 +1034,29 @@
   }
   $("filters").addEventListener("input", filtersChanged);
   $("filters").addEventListener("change", filtersChanged);
+  function profileFiltersChanged() {
+    clearTimeout(state.filterTimer);
+    clearTimeout(state.timer);
+    state.generation += 1;
+    if (state.request) state.request.abort();
+    try {
+      paramsForProfiles();
+      state.errorMessage = null;
+      state.errorRetained = false;
+      renderStatus();
+      state.filterTimer = setTimeout(function () {
+        if (state.page === "profiles") pollNow();
+      }, 350);
+    } catch (_) {
+      state.errorMessage = { key: "invalidFilter" };
+      state.connectionMessage = null;
+      state.errorRetained = false;
+      renderStatus();
+      $("loading").hidden = true;
+    }
+  }
+  $("profile-filters").addEventListener("input", profileFiltersChanged);
+  $("profile-filters").addEventListener("change", profileFiltersChanged);
   document.querySelectorAll("nav a[data-route]").forEach(function (link) {
     link.addEventListener("click", function (event) {
       event.preventDefault();
@@ -835,7 +1064,8 @@
     });
   });
   window.addEventListener("popstate", function () {
-    setPage(location.pathname.endsWith("/map") ? "map" : "analytics", false);
+    setPage(location.pathname.endsWith("/map") ? "map"
+      : location.pathname.endsWith("/profiles") ? "profiles" : "analytics", false);
   });
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
@@ -850,6 +1080,7 @@
 
   $("analytics-page").hidden = state.page !== "analytics";
   $("map-page").hidden = state.page !== "map";
+  $("profiles-page").hidden = state.page !== "profiles";
   syncEndControls(true);
   applyLanguage();
   pollNow();

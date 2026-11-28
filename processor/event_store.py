@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 
+from processor.dataset import STAGE2_SEQUENCE_START
 from processor.validation import Issue, parse_json_record, parse_source_timestamp, validate_event
 
 
@@ -85,9 +86,45 @@ class EventStore:
             )
             return "rejected"
 
+        sequence = event["seq"]
+        if source == "offline":
+            target_table = "events"
+            if sequence >= STAGE2_SEQUENCE_START:
+                self._quarantine(
+                    raw_payload,
+                    source,
+                    topic,
+                    [Issue("error", "seq", "offline input must contain Stage 1 events only")],
+                    source_path,
+                    line_number,
+                    connection,
+                )
+                return "rejected"
+        elif source == "mqtt":
+            target_table = "online_events"
+            if sequence < STAGE2_SEQUENCE_START:
+                self._quarantine(
+                    raw_payload,
+                    source,
+                    topic,
+                    [Issue("error", "seq", "MQTT input must contain Stage 2 events only")],
+                    source_path,
+                    line_number,
+                    connection,
+                )
+                return "rejected"
+        else:
+            raise ValueError(f"unsupported event source: {source}")
+
         timestamp = utc_from_source_time(parse_source_timestamp(event["ts"]))
         return self._persist_event(
-            event, raw_text, timestamp, issues, line_number, connection
+            event,
+            raw_text,
+            timestamp,
+            issues,
+            line_number,
+            connection,
+            target_table=target_table,
         )
 
     def quarantine_payload(
@@ -109,22 +146,25 @@ class EventStore:
         issues: list[Issue],
         line_number: int | None,
         connection: Connection | None,
+        target_table: str = "events",
     ) -> str:
         """Insert once; preserve first payload and audit conflicting sequences."""
+        if target_table not in ("events", "online_events"):
+            raise ValueError(f"unsupported event table: {target_table}")
         seq = event["seq"]
         payload_digest = content_hash(event)
         issue_json = json.dumps([asdict(issue) for issue in issues], ensure_ascii=True) if issues else None
         status = "warning" if issues else "valid"
         if self.engine.dialect.name == "mysql":
             insert = (
-                "INSERT INTO events "
+                f"INSERT INTO {target_table} "
                 "(seq, type, ts_utc, payload, validation_status, validation_reason, source_line_number) "
                 "VALUES (:seq, :type, :ts, :payload, :status, :reason, :line) "
                 "ON DUPLICATE KEY UPDATE seq = seq"
             )
         else:
             insert = (
-                "INSERT INTO events "
+                f"INSERT INTO {target_table} "
                 "(seq, type, ts_utc, payload, validation_status, validation_reason, source_line_number) "
                 "VALUES (:seq, :type, :ts, :payload, :status, :reason, :line) "
                 "ON CONFLICT(seq) DO NOTHING"
@@ -135,7 +175,7 @@ class EventStore:
             if connection is None:
                 self._set_utc(active_connection)
             existing = active_connection.execute(
-                text("SELECT payload FROM events WHERE seq = :seq"),
+                text(f"SELECT payload FROM {target_table} WHERE seq = :seq"),
                 {"seq": seq},
             ).scalar_one_or_none()
             if existing is not None:
@@ -161,7 +201,7 @@ class EventStore:
             if result.rowcount == 1:
                 return "warning" if issues else "stored"
             existing = active_connection.execute(
-                text("SELECT payload FROM events WHERE seq = :seq"),
+                text(f"SELECT payload FROM {target_table} WHERE seq = :seq"),
                 {"seq": seq},
             ).scalar_one_or_none()
             if existing is None:

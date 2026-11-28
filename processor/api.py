@@ -13,6 +13,7 @@ from sqlalchemy import Engine, text
 
 from processor.analytics import AnalyticsService
 from processor.station_snapshot import StationSnapshotService
+from processor.station_profiles import StationProfileService
 
 
 LOGGER = logging.getLogger("processor.api")
@@ -39,6 +40,7 @@ def create_handler(engine: Engine, token: str) -> type[BaseHTTPRequestHandler]:
     """Create a request handler bound to the engine and bearer token."""
     analytics = AnalyticsService(engine)
     stations = StationSnapshotService(engine)
+    profiles = StationProfileService(engine)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "BikeSharingAnalytics/1.0"
@@ -63,6 +65,42 @@ def create_handler(engine: Engine, token: str) -> type[BaseHTTPRequestHandler]:
                     LOGGER.exception("Station snapshot request failed")
                     self._send_json(500, {"error": "station snapshot request failed"})
                     return
+                self._send_json(200, result)
+                return
+            if path.path == "/api/ml/model":
+                if path.query:
+                    self._send_json(400, {"error": "query parameters are not supported"})
+                    return
+                try:
+                    result = {"model": profiles.model()}
+                except Exception:
+                    LOGGER.exception("Station profile model request failed")
+                    self._send_json(500, {"error": "station profile model request failed"})
+                    return
+                self._send_json(200, result)
+                return
+            if path.path in ("/api/ml/profiles", "/api/ml/flags"):
+                try:
+                    query = parse_qs(path.query, strict_parsing=True)
+                    if set(query) != {"start", "end"} or any(
+                        len(values) != 1 for values in query.values()
+                    ):
+                        raise ValueError("start and end query parameters are required once")
+                    result = profiles.profiles(query["start"][0], query["end"][0])
+                except ValueError as exc:
+                    self._send_json(400, {"error": str(exc)})
+                    return
+                except Exception:
+                    LOGGER.exception("Station profile request failed")
+                    self._send_json(500, {"error": "station profile request failed"})
+                    return
+                if path.path == "/api/ml/flags":
+                    result = {
+                        "model": result["model"],
+                        "start": result.get("start"),
+                        "end": result.get("end"),
+                        "flags": result["flags"],
+                    }
                 self._send_json(200, result)
                 return
             if path.path != "/api/analytics":

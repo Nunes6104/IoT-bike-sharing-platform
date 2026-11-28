@@ -127,11 +127,37 @@ services:
         condition: service_healthy
 
   ml-processor:
-    image: python:3.13-slim
+    build:
+      context: .
+      dockerfile: ml_processor/Dockerfile
     restart: unless-stopped
-    command: ["python", "-u", "/app/placeholder.py", "ML processor"]
+    init: true
+    environment:
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_NAME: bike_sharing
+      DB_USER: bike_app
+      DB_PASSWORD_FILE: /run/bike-secrets/db-user.password
+      DB_CA_CERT: /run/bike-certs/ca.crt
+      ML_REFRESH_SECONDS: "${ML_REFRESH_SECONDS:-60}"
+      ML_UNDERUSE_PERCENTILE: "${ML_UNDERUSE_PERCENTILE:-0.10}"
+      ML_MIN_STATUS_OBSERVATIONS: "${ML_MIN_STATUS_OBSERVATIONS:-4}"
+      ML_OCCUPANCY_SHARE_LIMIT: "${ML_OCCUPANCY_SHARE_LIMIT:-0.50}"
+      ML_OCCUPANCY_SHIFT_LIMIT: "${ML_OCCUPANCY_SHIFT_LIMIT:-0.50}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     volumes:
-      - ./infrastructure/placeholder.py:/app/placeholder.py:ro
+      - ./.local/mysql/db-user.password:/run/bike-secrets/db-user.password:ro
+      - ./.local/certs/ca.crt:/run/bike-certs/ca.crt:ro
+    depends_on:
+      processor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "ml_processor", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    stop_grace_period: 30s
 
   dashboard:
     build:

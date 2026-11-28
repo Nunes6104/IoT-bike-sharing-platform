@@ -30,6 +30,7 @@ label { font-weight: 650; }
 input, select, button { font: inherit; border: 1px solid #8499a3; border-radius: .35rem; padding: .45rem .55rem; background: #fff; color: inherit; }
 input:focus, select:focus, button:focus-visible, a:focus-visible, .station-list button:focus-visible { outline: 3px solid #66bed0; outline-offset: 2px; }
 #filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem .9rem; align-items: end; max-width: 980px; }
+#profile-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: .5rem .9rem; align-items: end; }
 .filter-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
 #filters input, #filters select { width: 100%; min-width: 0; }
 .field-help { grid-column: 1 / -1; color: #526670; font-size: .86rem; }
@@ -72,7 +73,7 @@ footer { display: flex; justify-content: space-between; gap: 1rem; color: #52667
   .site-header { grid-template-columns: 1fr; }
   .header-actions { justify-self: start; }
   nav { grid-column: auto; }
-  #filters { grid-template-columns: 1fr; }
+  #filters, #profile-filters { grid-template-columns: 1fr; }
   .field-help { grid-column: auto; }
   .chart-grid, .map-layout { grid-template-columns: 1fr; }
   #station-map { min-height: 300px; }

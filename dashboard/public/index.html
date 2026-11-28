@@ -24,6 +24,7 @@
     <nav data-i18n-aria="navAria" aria-label="Dashboard pages">
       <a href="/bike-sharing" data-route="analytics" data-i18n="analyticsNav">Analytics</a>
       <a href="/bike-sharing/map" data-route="map" data-i18n="mapNav">Station map</a>
+      <a href="/bike-sharing/profiles" data-route="profiles" data-i18n="profilesNav">Station profiles</a>
     </nav>
   </header>
 
@@ -119,6 +120,21 @@
     <section id="map-page" class="page" aria-labelledby="map-heading" hidden>
       <h2 id="map-heading" data-i18n="mapHeading">Station availability map</h2>
       <p class="muted" data-i18n="mapScope">Latest committed station reports, independent of analytics filters. Report times are historical source times (UTC−04:00), not live telemetry.</p>
+      <h3 data-i18n="activeTripsHeading">Active trips in the Stage 2 stream</h3>
+      <p class="muted" data-i18n="activeTripsNote">A trip is open when its latest Stage 2 event is a start without a matching end. Times are historical source/replay times, not present-day riders; incomplete source records can remain open.</p>
+      <div id="active-trips-summary" class="cards" data-i18n-aria="activeTripsSummaryAria" aria-label="Active trip summary"></div>
+      <p id="active-trips-empty" class="empty-state" data-i18n="activeTripsEmpty" hidden>No unmatched Stage 2 trip starts.</p>
+      <div class="table-wrap">
+        <table>
+          <caption data-i18n="activeTripsCaption">Open Stage 2 trips, ordered by most recently received start.</caption>
+          <thead><tr>
+            <th data-i18n="tripIdColumn">Trip ID</th><th data-i18n="tripStartedColumn">Started (UTC−04:00)</th>
+            <th data-i18n="tripStationColumn">Start station</th><th data-i18n="tripBikeColumn">Bike type</th>
+            <th data-i18n="tripUserColumn">User type</th><th data-i18n="warnings">Validation warnings</th>
+          </tr></thead>
+          <tbody id="active-trips"></tbody>
+        </table>
+      </div>
       <p id="map-tile-error" class="error" role="status" hidden data-i18n="tileError">Map tiles are unavailable. Station data and the station list remain available.</p>
       <div class="map-layout">
         <div id="station-map" role="region" data-i18n-aria="stationMapAria" aria-label="Map of bike stations"></div>
@@ -133,6 +149,56 @@
         <div id="detail-content" class="detail-grid"></div>
       </section>
       <p id="last-map-update" class="muted"></p>
+    </section>
+
+    <section id="profiles-page" class="page" aria-labelledby="profiles-heading" hidden>
+      <h2 id="profiles-heading" data-i18n="profilesHeading">Station profiles and cluster evolution</h2>
+      <p class="muted" data-i18n="profilesNote">Daily profiles use source-local dates (UTC−04:00). The end date is exclusive; missing status observations are not imputed.</p>
+      <form id="profile-filters">
+        <div class="filter-field">
+          <label for="profile-start" data-i18n="profileFromLabel">From (local date)</label>
+          <input id="profile-start" type="date" min="2024-03-13" max="2024-03-22" value="2024-03-13" required>
+        </div>
+        <div class="filter-field">
+          <label for="profile-end" data-i18n="profileUntilLabel">Until, exclusive (local date)</label>
+          <input id="profile-end" type="date" min="2024-03-14" max="2024-03-23" value="2024-03-23" required>
+        </div>
+        <span class="field-help" data-i18n="profileDateHelp">Choose a 1–31 day range in the supplied dataset period. The end date is exclusive.</span>
+      </form>
+      <p id="profiles-empty" class="empty-state" data-i18n="profilesEmpty" hidden>No model or station profiles are available for this range.</p>
+      <div id="profile-summary" class="cards" data-i18n-aria="profileSummaryAria" aria-label="Profile model summary"></div>
+      <h3 data-i18n="clusterEvolutionHeading">Station count by cluster and day</h3>
+      <div id="cluster-chart" class="chart"></div>
+      <div class="table-wrap">
+        <table>
+          <caption data-i18n="profileTableCaption">Each row is a versioned station/day assignment with measured feature values.</caption>
+          <thead><tr>
+            <th data-i18n="dateColumn">Local date</th><th data-i18n="stationColumn">Station</th>
+            <th data-i18n="cityColumn">City</th><th data-i18n="clusterColumn">Cluster</th>
+            <th data-i18n="turnoverColumn">Trips per dock</th><th data-i18n="occupancyColumn">Mean reported occupancy</th>
+            <th data-i18n="memberShareColumn">Member share</th><th data-i18n="electricShareColumn">E-bike share</th>
+            <th data-i18n="distanceCoverageColumn">Distance coverage</th><th data-i18n="energyColumn">Known energy (kWh)</th>
+            <th data-i18n="energyCoverageColumn">Energy coverage</th>
+          </tr></thead>
+          <tbody id="profiles"></tbody>
+        </table>
+      </div>
+      <h3 data-i18n="flagsHeading">Explainable operational flags</h3>
+      <p class="muted" data-i18n="flagsNote">Flags are comparative or rule-based indicators, not rebalancing recommendations. They use observed data and explicit thresholds.</p>
+      <p id="flags-empty" class="empty-state" data-i18n="flagsEmpty" hidden>No operational flags were triggered for this range.</p>
+      <div class="table-wrap">
+        <table>
+          <caption data-i18n="flagsTableCaption">Every flag includes its observed value and evaluation basis.</caption>
+          <thead><tr>
+            <th data-i18n="dateColumn">Local date</th><th data-i18n="stationColumn">Station</th>
+            <th data-i18n="flagColumn">Flag</th><th data-i18n="severityColumn">Severity</th>
+            <th data-i18n="observedColumn">Observed</th><th data-i18n="thresholdColumn">Threshold</th>
+            <th data-i18n="basisColumn">Basis</th>
+          </tr></thead>
+          <tbody id="profile-flags"></tbody>
+        </table>
+      </div>
+      <p id="last-profiles-update" class="muted"></p>
     </section>
   </main>
   <footer>

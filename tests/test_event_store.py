@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
+from processor.dataset import STAGE2_SEQUENCE_START
 from processor.event_store import EventStore
 
 
@@ -17,6 +18,17 @@ class EventStoreTests(unittest.TestCase):
         with self.engine.begin() as connection:
             connection.execute(text("""
                 CREATE TABLE events (
+                    seq INTEGER PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    ts_utc DATETIME NOT NULL,
+                    payload TEXT NOT NULL,
+                    validation_status TEXT NOT NULL,
+                    validation_reason TEXT,
+                    source_line_number INTEGER
+                )
+            """))
+            connection.execute(text("""
+                CREATE TABLE online_events (
                     seq INTEGER PRIMARY KEY,
                     type TEXT NOT NULL,
                     ts_utc DATETIME NOT NULL,
@@ -61,7 +73,7 @@ class EventStoreTests(unittest.TestCase):
         self.engine.dispose()
 
     @staticmethod
-    def event(sequence=1, station_id="JC115"):
+    def event(sequence=STAGE2_SEQUENCE_START, station_id="JC115"):
         return {
             "type": "station_status",
             "ts": "2024-03-20T14:30:00-04:00",
@@ -82,7 +94,10 @@ class EventStoreTests(unittest.TestCase):
         self.assertEqual(self.store.ingest(payload, source="mqtt", topic="idc/fc10/status/JC115"), "stored")
         self.assertEqual(self.store.ingest(payload, source="mqtt", topic="idc/fc10/status/JC115"), "duplicate")
         with self.engine.connect() as connection:
-            self.assertEqual(connection.execute(text("SELECT COUNT(*) FROM events")).scalar_one(), 1)
+            self.assertEqual(
+                connection.execute(text("SELECT COUNT(*) FROM online_events")).scalar_one(),
+                1,
+            )
 
     def test_mysql_duplicate_detection_does_not_depend_on_rowcount(self):
         payload = json.dumps(self.event(), separators=(",", ":"))
@@ -159,7 +174,10 @@ class EventStoreTests(unittest.TestCase):
         self.assertEqual(self.store.ingest(changed, source="mqtt"), "conflict")
         self.assertEqual(self.store.ingest(changed, source="mqtt"), "conflict")
         with self.engine.connect() as connection:
-            payload = connection.execute(text("SELECT payload FROM events WHERE seq=1")).scalar_one()
+            payload = connection.execute(
+                text("SELECT payload FROM online_events WHERE seq=:seq"),
+                {"seq": STAGE2_SEQUENCE_START},
+            ).scalar_one()
             conflicts = connection.execute(text("SELECT COUNT(*) FROM event_conflicts")).scalar_one()
         self.assertEqual(json.loads(payload)["station_id"], "JC115")
         self.assertEqual(conflicts, 1)
@@ -183,10 +201,43 @@ class EventStoreTests(unittest.TestCase):
         self.assertEqual(disposition, "warning")
         with self.engine.connect() as connection:
             status, timestamp = connection.execute(
-                text("SELECT validation_status, ts_utc FROM events WHERE seq=1")
+                text("SELECT validation_status, ts_utc FROM online_events WHERE seq=:seq"),
+                {"seq": STAGE2_SEQUENCE_START},
             ).one()
         self.assertEqual(status, "warning")
         self.assertIn("18:30:00", str(timestamp))
+
+    def test_stage_routing_keeps_offline_events_immutable(self):
+        offline = self.event(sequence=1)
+        offline_payload = json.dumps(offline).encode()
+        self.assertEqual(self.store.ingest(offline_payload, source="offline"), "stored")
+
+        mqtt_stage1 = {**offline, "num_bikes_available": 8}
+        self.assertEqual(
+            self.store.ingest(json.dumps(mqtt_stage1).encode(), source="mqtt"),
+            "rejected",
+        )
+        offline_stage2 = self.event(sequence=STAGE2_SEQUENCE_START)
+        self.assertEqual(
+            self.store.ingest(
+                json.dumps(offline_stage2).encode(), source="offline"
+            ),
+            "rejected",
+        )
+
+        with self.engine.connect() as connection:
+            stored = connection.execute(
+                text("SELECT payload FROM events WHERE seq=1")
+            ).scalar_one()
+            online_count = connection.execute(
+                text("SELECT COUNT(*) FROM online_events")
+            ).scalar_one()
+            quarantined = connection.execute(
+                text("SELECT COUNT(*) FROM rejected_messages")
+            ).scalar_one()
+        self.assertEqual(json.loads(stored), offline)
+        self.assertEqual(online_count, 0)
+        self.assertEqual(quarantined, 2)
 
 
 if __name__ == "__main__":
